@@ -1,0 +1,22 @@
+# Settings for your own home go in .env (copy .env.example). This file needs no edits.
+name: kamstrup-monitor
+services:
+  kamstrup-monitor:
+    # the ready-made image, built from this repository on every update (amd64 and arm64, e.g. a Raspberry Pi)
+    image: ghcr.io/ajin/smartgateways-kamstrup-monitor:latest
+    build: .   # used only with `docker compose up --build`
+    container_name: kamstrup-monitor
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      # Most settings are changed on the dashboard's Settings page (saved in data/settings.json).
+      # Values from .env below are only starting values for a new installation.
+      GATEWAY: ${GATEWAY:-}
+      POLL_INTERVAL: ${POLL_INTERVAL:-}
+      REQUIRE_SIGNIN: ${REQUIRE_SIGNIN:-}        # on by default; can be switched off on the Settings page
+      RESET_PASSWORD: ${RESET_PASSWORD:-}        # true = back to the default password at start (forgotten password)
+      HOST_PORT: ${PORT:-8080}   # only shown on the Settings page
+      TZ: ${TZ:-UTC}

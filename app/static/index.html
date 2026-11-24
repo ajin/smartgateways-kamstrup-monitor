@@ -1,0 +1,2111 @@
+<!doctype html>
+<!-- Kamstrup Monitor. SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kamstrup Monitor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='10' fill='%23eb6834'/><path d='M7 15a5 5 0 0 1 10 0' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/><path d='m12 15 3-4' stroke='white' stroke-width='2' stroke-linecap='round'/></svg>">
+<script>try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch { /* storage blocked */ }</script>
+<style>
+/* ---- look and feel ---- */
+/* ------------------------------------------------------------------ tokens */
+:root {
+  color-scheme: light;
+  /* neutral greys; orange only for heat, yellow for warnings, raspberry only for problems, blue for targets */
+  --page: #f4f5f7; --surface: #ffffff; --surface-2: #f6f7f9; --hover: rgba(15,17,21,.045);
+  --ink: #0f1115; --ink-2: #4a4f57; --ink-3: #737a83;
+  --grid: #e6e8eb; --axis: #c2c6cc; --line: rgba(15,17,21,.10);
+  --heat: #eb6834; --heat-ink: #b8481b; --hot: #b71c1c; --setpoint: #2a78d6; --temp: #1c1f24;
+  --good: #0ca30c; --good-ink: #006300; --warn: #e8c020; --warn-ink: #6f5600; --crit: #b8246a;
+  --radius: 10px; --sidebar: 232px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0e0f11; --surface: #17191c; --surface-2: #1f2226; --hover: rgba(255,255,255,.05);
+    --ink: #eef0f3; --ink-2: #c0c4ca; --ink-3: #868c94;
+    --grid: #2a2d32; --axis: #3a3e44; --line: rgba(255,255,255,.10);
+    --heat: #d95926; --heat-ink: #f08a5d; --hot: #b02420; --setpoint: #3987e5; --temp: #eef0f3;
+    --good-ink: #0ca30c; --warn: #e6c64a; --warn-ink: #e6c64a; --crit: #c9479a;
+  
+  }
+}
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0e0f11; --surface: #17191c; --surface-2: #1f2226; --hover: rgba(255,255,255,.05);
+    --ink: #eef0f3; --ink-2: #c0c4ca; --ink-3: #868c94;
+    --grid: #2a2d32; --axis: #3a3e44; --line: rgba(255,255,255,.10);
+    --heat: #d95926; --heat-ink: #f08a5d; --hot: #b02420; --setpoint: #3987e5; --temp: #eef0f3;
+    --good-ink: #0ca30c; --warn: #e6c64a; --warn-ink: #e6c64a; --crit: #c9479a;
+  
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--ink); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; letter-spacing: -.01em; }
+.muted { color: var(--ink-3); } .soft { color: var(--ink-2); }
+.small { font-size: 12px; }
+svg.i { width: 16px; height: 16px; flex: none; vertical-align: -3px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ------------------------------------------------------------------ shell */
+.shell { display: grid; grid-template-columns: var(--sidebar) 1fr; min-height: 100vh; }
+aside { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 20px; padding: 20px 14px; border-right: 1px solid var(--line); background: var(--surface); }
+.brand { display: flex; align-items: center; gap: 8px; padding: 0 8px; font-weight: 650; letter-spacing: -.01em; }
+.brand svg { width: 20px; height: 20px; fill: var(--ink); stroke: none; }
+nav.side { display: flex; flex-direction: column; gap: 2px; }
+nav.side a { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; color: var(--ink-2); text-decoration: none; }
+nav.side a:hover { background: var(--hover); color: var(--ink); }
+nav.side a.on { background: var(--hover); color: var(--ink); font-weight: 600; }
+nav.side a .count { margin-left: auto; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+nav.side a .count.alert { color: var(--warn-ink); font-weight: 600; }
+.meta { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 10px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+.meta div { display: flex; justify-content: space-between; gap: 8px; }
+.meta div span:first-child { color: var(--ink-3); }
+.disclaim { font-size: 11px; line-height: 1.45; color: var(--ink-3); margin: 4px 0 0; }
+.disclaim a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.disclaim a:hover { color: var(--ink); }
+.about { max-width: 72ch; }
+.about h2 { font-size: 17px; margin: 26px 0 6px; }
+.about p, .about li { color: var(--ink-2); line-height: 1.6; }
+.about ul { padding-left: 20px; margin: 6px 0; }
+.about a { color: var(--setpoint); }
+
+.meta .live { text-decoration: none; display: flex; justify-content: flex-start; align-items: center; gap: 8px; font-weight: 500; color: var(--ink); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; display: inline-block; }
+.dot.good { background: var(--good); }
+.live .dot.good { box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 18%, transparent); }
+.dot.crit { background: var(--crit); }
+.dot.warn { background: var(--warn); }
+.linkbtn { background: none; border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; cursor: pointer; color: var(--ink-2); font-size: 12px; }
+.linkbtn:hover { background: var(--hover); color: var(--ink); }
+main { min-width: 0; padding: 28px 36px 60px; max-width: 1240px; }
+main:has(#p-history.on) { max-width: none; } /* charts use the whole screen; text pages stay readable */
+.page { display: none; } .page.on { display: block; }
+h1 { font-size: 22px; letter-spacing: -.02em; margin: 0 0 4px; font-weight: 650; }
+h2 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -.01em; }
+.lede { color: var(--ink-2); margin: 0 0 22px; max-width: 72ch; }
+.section { margin-top: 32px; }
+.section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 10px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.pad { padding: 16px 18px; }
+/* phones and tablets: a top bar with the connection state, a tab bar for the everyday pages,
+   and "More" opening the full menu (detail pages, appearance, connection, about) as a side sheet */
+.topbar, .tabbar, .side-close, .mscrim { display: none; }
+@media (max-width: 1023px) {
+  .shell { grid-template-columns: 1fr; }
+  .topbar { display: flex; position: sticky; top: 0; z-index: 20; align-items: center; justify-content: space-between; gap: 12px; padding: calc(10px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); background: color-mix(in srgb, var(--page) 90%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+  .topbar .brand { padding: 0; color: inherit; text-decoration: none; }
+  .tstatus { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 6px 12px; min-height: 36px; font-size: 13px; cursor: pointer; }
+  .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line); padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .tabbar a, .tabbar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 56px; padding: 6px 1px; font-size: 10.5px; letter-spacing: -.01em; color: var(--ink-3); text-decoration: none; background: none; border: 0; cursor: pointer; position: relative; min-width: 0; }
+  .tabbar span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabbar svg.i { width: 22px; height: 22px; }
+  .tabbar .on { color: var(--ink); font-weight: 600; }
+  .tabbar .on svg.i { stroke-width: 2.2; }
+  .tabbar .badge-dot { position: absolute; top: 8px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--crit); }
+  main { padding: 18px max(16px, env(safe-area-inset-right)) calc(88px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  aside { position: fixed; top: 0; right: 0; bottom: 0; height: auto; width: min(340px, 90vw); z-index: 40; transform: translateX(100%); visibility: hidden; transition: transform .22s ease, visibility .22s; overflow-y: auto; border-right: 0; border-left: 1px solid var(--line); padding: calc(16px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)); box-shadow: -12px 0 40px rgba(0,0,0,.14); }
+  body.more-open aside { transform: none; visibility: visible; }
+  .side-head { display: flex; align-items: center; justify-content: space-between; }
+  .side-close { display: grid; place-items: center; }
+  .mscrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.28); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 39; }
+  body.more-open .mscrim { opacity: 1; pointer-events: auto; }
+  nav.side a { padding: 11px 10px; }
+  .meta { margin-top: 8px; }
+}
+@media (min-width: 600px) and (max-width: 1023px) {
+  .tabbar a, .tabbar button { flex-direction: row; gap: 8px; font-size: 13px; }
+  main { padding-left: max(28px, env(safe-area-inset-left)); padding-right: max(28px, env(safe-area-inset-right)); }
+}
+@media (prefers-reduced-motion: reduce) { aside, .drawer { transition: none !important; } }
+
+/* touch screens: every control at least ~40px high, inputs at 16px so iOS does not zoom in */
+@media (pointer: coarse) {
+  .seg button { padding: 9px 14px; min-height: 40px; }
+  .linkbtn { min-height: 38px; padding: 8px 12px; }
+  .daypick button { min-height: 38px; padding: 6px 14px; font-size: 13px; }
+  .sc-rooms button { min-height: 42px; }
+  .close { width: 40px; height: 40px; }
+  .theme button { width: 44px; height: 36px; }
+  .icon-btn { width: 42px; height: 42px; }
+  .btn { min-height: 40px; padding: 8px 16px; }
+  .offrow button, .todo button, .morelink { min-height: 36px; }
+  input, select, textarea { font-size: 16px !important; }
+}
+.chart { touch-action: pan-y; }
+/* ------------------------------------------------------------------ home */
+.navlabel { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); padding: 14px 10px 4px; }
+.home-head { display: flex; gap: 16px; align-items: center; margin: 2px 0 26px; }
+.home-head .badge { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); color: var(--ink-3); flex: none; }
+.home-head .badge svg { width: 28px; height: 28px; fill: currentColor; stroke: none; }
+.home-head.heating .badge { background: color-mix(in srgb, var(--heat) 14%, var(--surface)); border-color: transparent; color: var(--heat); }
+.home-head h1 { font-size: 30px; margin: 0; letter-spacing: -.025em; }
+.home-head .sub { font-size: 16px; color: var(--ink-2); margin-top: 2px; }
+.home-head .sub b { color: var(--ink); font-weight: 600; }
+.home-head .upd { font-size: 12px; color: var(--ink-3); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.todo { display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: start; padding: 14px 16px; border-top: 1px solid var(--line); }
+.todo:first-child { border-top: 0; }
+.todo .ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--ink-2); }
+.todo.crit .ic { background: color-mix(in srgb, var(--crit) 12%, transparent); color: var(--crit); }
+.todo.warn .ic { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn-ink); }
+.todo .ti { font-weight: 600; font-size: 15px; }
+.todo .tx { color: var(--ink-2); margin-top: 1px; }
+.todo .hide { background: none; border: 0; color: var(--ink-3); cursor: pointer; font-size: 12px; padding: 4px 6px; border-radius: 6px; }
+.todo .hide:hover { background: var(--hover); color: var(--ink); }
+.showhidden { background: none; border: 0; color: var(--ink-3); font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+.room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.rcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 154px; text-align: left; color: inherit; font: inherit; }
+.rcard:hover { border-color: var(--axis); }
+.rcard.heating { border-color: color-mix(in srgb, var(--heat) 40%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--heat) 7%, var(--surface)), var(--surface) 70%); }
+.rcard .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rcard .nm { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rcard .top svg.i { color: var(--ink-3); }
+.rcard.heating .top .fl { color: var(--heat); }
+.rcard .top .fl { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.rcard .top .pr { color: var(--warn-ink); }
+.rcard .t { font-size: 40px; font-weight: 300; letter-spacing: -.035em; line-height: 1.05; margin-top: 6px; }
+.rcard .t small { font-size: 18px; color: var(--ink-3); margin-left: 1px; }
+.rcard .st { font-size: 13px; color: var(--ink-2); }
+.rcard .st.heat { color: var(--heat-ink); font-weight: 600; }
+.rcard .md { font-size: 12px; color: var(--ink-3); }
+.rcard canvas.spark { width: 100%; height: 26px; margin-top: auto; }
+.rcard .md { margin-bottom: 8px; }
+.offrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; font-size: 13px; color: var(--ink-3); }
+.offrow button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; color: var(--ink-2); font-size: 13px; }
+.offrow button:hover { color: var(--ink); border-color: var(--axis); }
+.usage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 900px) { .usage-grid { grid-template-columns: 1fr; } }
+.ucard { padding: 16px 18px 14px; }
+.ucard .l { font-size: 13px; color: var(--ink-3); }
+.ucard .v { font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin: 2px 0 0; }
+.ucard .s { color: var(--ink-2); min-height: 20px; }
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 86px; margin-top: 14px; border-bottom: 1px solid var(--axis); }
+.bars > div { flex: 1; height: 100%; display: flex; align-items: flex-end; position: relative; }
+.bars i { display: block; width: 100%; background: var(--heat); border-radius: 4px 4px 0 0; min-height: 0; }
+.bars > div.zero i { background: none; }
+.bars > div.future i, .bars > div.nodata i { background: repeating-linear-gradient(135deg, var(--grid) 0 3px, transparent 3px 6px); height: 100% !important; border-radius: 4px 4px 0 0; }
+.bars > div.today i { background: var(--heat); }
+.bars > div:hover i { filter: brightness(1.08); }
+.bars.week { gap: 8px; }
+.bars.week > div { flex-direction: column; justify-content: flex-end; }
+.bars.week .bv { font-size: 11px; color: var(--ink-2); text-align: center; margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+.axisrow { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.axisrow.week { justify-content: space-around; gap: 8px; }
+.axisrow.week span { flex: 1; text-align: center; }
+.axisrow.week span.on { color: var(--ink); font-weight: 600; }
+.morelink { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--ink-2); text-decoration: none; }
+.morelink:hover { color: var(--ink); text-decoration: underline; }
+.needs-setup .page:not(#p-settings):not(#p-about) { display: none !important; }
+.theme { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); align-self: flex-start; }
+.theme button { border: 0; background: none; color: var(--ink-3); width: 30px; height: 26px; border-radius: 6px; cursor: pointer; display: grid; place-items: center; }
+.theme button:hover { color: var(--ink); }
+.theme button.on { background: var(--ink); color: var(--surface); }
+/* ------------------------------------------------------------------ controls */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-bottom: 14px; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 2px; max-width: 100%; overflow-x: auto; }
+.seg button { border: 0; background: none; padding: 5px 11px; border-radius: 6px; cursor: pointer; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+.seg button:hover { color: var(--ink); }
+.seg button.on { background: var(--ink); color: var(--surface); font-weight: 500; }
+input.f, select.f { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+input.f:focus, select.f:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--setpoint); outline-offset: 1px; }
+.btn { background: var(--ink); color: var(--surface); border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+.ctl-msg { font-size: 13px; color: var(--ink-2); display: flex; gap: 6px; align-items: center; min-height: 18px; }
+.ctl-msg.ok { color: var(--good-ink); } .ctl-msg.err { color: var(--crit); }
+.ctl-msg svg.i { width: 15px; height: 15px; flex: none; }
+.field { display: grid; gap: 6px; }
+.field span { font-size: 13px; font-weight: 600; }
+.field input, .pwform input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }
+.field input:focus, .pwform input:focus { outline: 2px solid var(--setpoint); outline-offset: 1px; }
+.auth-card .btn { padding: 10px 16px; font-size: 15px; }
+.notice { border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--ink-2); }
+.setsec { padding: 18px 20px; margin-bottom: 16px; max-width: 860px; }
+.setsec > h2 { font-size: 16px; margin-bottom: 2px; }
+.setsec .ctl-msg:empty { display: none; }
+.setsec { scroll-margin-top: 16px; }
+@media (max-width: 1023px) { .setsec { scroll-margin-top: 76px; } }
+.setnav { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 18px; max-width: 860px; }
+.setnav button { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+.setnav button:hover { color: var(--ink); border-color: var(--ink-3); }
+@media (pointer: coarse) { .setnav button { min-height: 38px; padding: 6px 14px; } }
+.keys { display: grid; gap: 0; width: 100%; border: 1px solid var(--line); border-radius: var(--radius); }
+.keys:empty { display: none; }
+.keyrow { display: flex; justify-content: space-between; align-items: center; gap: 8px 14px; padding: 10px 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.keyrow:first-child { border-top: 0; }
+.keyrow .meta2 { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.newkey { width: 100%; border: 1px solid color-mix(in srgb, var(--good) 45%, var(--line)); background: color-mix(in srgb, var(--good) 7%, var(--surface)); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 8px; }
+.newkey code { display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; word-break: break-all; user-select: all; }
+.keyform { display: grid; gap: 8px; width: min(100%, 380px); }
+.keyform input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }
+.mqform { display: grid; gap: 10px; width: min(100%, 460px); }
+.mqform .two { display: grid; grid-template-columns: minmax(0, 1fr) 100px; gap: 8px; }
+.mqform input[type=text], .mqform input[type=number], .mqform input[type=password] { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; }
+.mqform > .seg { justify-self: start; }
+.mqform label.f2 { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.mqform details summary { cursor: pointer; font-size: 13px; color: var(--ink-2); padding: 4px 0; }
+@media (pointer: coarse) { .mqform input { font-size: 16px !important; } }
+.setfoot { max-width: 860px; font-size: 12px; color: var(--ink-3); margin: 6px 2px 0; line-height: 1.6; }
+.setsec > .sub { font-size: 13px; color: var(--ink-3); margin-bottom: 6px; }
+.setitem { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 6px 20px; padding: 14px 0; border-top: 1px solid var(--line); align-items: start; }
+.setitem:first-of-type { border-top: 0; }
+.setitem .lab b { display: block; font-weight: 600; }
+.setitem .lab span { display: block; font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.setitem .ctl2 { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.setitem .seg { flex-wrap: wrap; overflow: visible; }
+.setitem input[type=text] { width: min(100%, 360px); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+.setitem .from { font-size: 11px; color: var(--ink-3); }
+.chooser { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 0 0; margin: 0 0 14px; }
+.chooser > .small { padding: 0 16px 8px !important; }
+.chooser .cand { padding: 12px 16px; }
+@media (max-width: 700px) { .setitem { grid-template-columns: 1fr; } }
+/* ------------------------------------------------------------------ stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-bottom: 16px; overflow: hidden; }
+.tile { padding: 14px 16px; box-shadow: -1px 0 0 var(--line); }
+.tile .v { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+.tile .l { font-size: 12px; color: var(--ink-3); }
+
+/* ------------------------------------------------------------------ charts */
+.chart { position: relative; }
+.chart canvas { display: block; width: 100%; }
+.chart canvas.ov { position: absolute; inset: 0; pointer-events: none; }
+.tip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,.12); border-radius: 8px; padding: 8px 10px; font-size: 12px; min-width: 150px; display: none; }
+.tip .h { color: var(--ink-3); margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 8px; }
+.tip .r i { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+.tip .r i.box { height: 8px; border-radius: 2px; }
+.tip .r b { font-weight: 650; font-variant-numeric: tabular-nums; min-width: 44px; }
+.tip .r span { color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
+.legend i.box { height: 10px; width: 10px; border-radius: 2px; }
+.legend i.dash { height: 0; background: none; border-top: 2px dashed var(--ink-2); border-radius: 0; }
+.tchip { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; box-shadow: inset 0 0 0 1px var(--line); }
+.chart-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+.multiples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .multiples { grid-template-columns: 1fr; } }
+.multiples .panel { padding: 12px 14px 8px; cursor: pointer; }
+.multiples .panel:hover { border-color: var(--axis); }
+.mhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.mhead b { font-weight: 600; }
+/* ------------------------------------------------------------------ attribution */
+.attr { display: grid; grid-template-columns: minmax(110px, 160px) 1fr 64px; gap: 6px 14px; align-items: center; }
+.attr .bar { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.attr .bar i { display: block; height: 100%; background: var(--heat); border-radius: 4px; }
+.attr .pc { text-align: right; font-weight: 600; }
+.attr .note { grid-column: 2 / -1; font-size: 12px; color: var(--ink-3); margin: -2px 0 8px; }
+
+/* ------------------------------------------------------------------ tables */
+.tablewrap { overflow: auto; max-height: 640px; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.data th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-3); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; background: var(--surface); z-index: 2; }
+table.data td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.data tbody tr:last-child td { border-bottom: 0; }
+table.data td.r, table.data th.r { text-align: right; }
+table.data tr.group td { background: var(--surface-2); font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 7px 12px; }
+table.data tr.click { cursor: pointer; } table.data tr.click:hover td { background: var(--hover); }
+table.data tr.dim td { color: var(--ink-3); }
+table.data tr.new td { animation: fresh 1.6s ease-out; }
+@keyframes fresh { from { background: color-mix(in srgb, var(--setpoint) 12%, transparent); } }
+.who { display: flex; flex-direction: column; line-height: 1.25; }
+.who .mono { color: var(--ink-3); font-size: 11px; }
+.nowrap { white-space: nowrap; }
+.empty { padding: 28px; text-align: center; color: var(--ink-3); }
+.sig { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 12px; margin-right: 6px; vertical-align: -1px; }
+.sig i { width: 3px; background: var(--axis); border-radius: 1px; }
+.sig i.on { background: var(--ink-2); }
+/* ------------------------------------------------------------------ drawer */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.28); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 30; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(640px, 100vw); background: var(--surface); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .22s ease; z-index: 31; overflow-y: auto; padding: 22px 24px 40px; visibility: hidden; }
+body.drawer-open .scrim { opacity: 1; pointer-events: auto; }
+body.drawer-open .drawer { transform: none; visibility: visible; }
+.drawer .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.close { border: 0; background: var(--hover); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1; color: var(--ink-2); }
+.bigtemp { font-size: 48px; font-weight: 300; letter-spacing: -.03em; line-height: 1; margin: 14px 0 6px; }
+.bigtemp small { font-size: 18px; color: var(--ink-3); }
+.facts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 18px; margin: 18px 0 22px; }
+.facts-grid .l { font-size: 12px; color: var(--ink-3); }
+.facts-grid .v { font-weight: 500; }
+.dev-card { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; }
+.tag svg.i { width: 12px; height: 12px; }
+.tag.warn { color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.tag.crit { color: var(--crit); border-color: color-mix(in srgb, var(--crit) 45%, transparent); }
+.tag.good { color: var(--good-ink); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.tag.heat { color: var(--heat-ink); border-color: color-mix(in srgb, var(--heat) 45%, transparent); }
+
+/* sign-in screen */
+.auth { position: fixed; inset: 0; z-index: 100; background: var(--page); display: grid; place-items: center; padding: 24px; overflow-y: auto; }
+.auth-card { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px 26px 22px; display: grid; gap: 14px; }
+.auth-card h1 { font-size: 22px; margin: 4px 0 0; }
+.auth-card p { margin: 0; color: var(--ink-2); }
+.auth-card .brand { padding: 0; }
+.pwform { display: grid; gap: 8px; width: min(100%, 360px); }
+.pwform input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; }
+.pwform input:focus { outline: 2px solid var(--setpoint); outline-offset: 1px; }
+
+/* ------------------------------------------------------------------ Kamstrup Monitor additions */
+/* colour meanings: orange = heat (power, energy), red = hot water in, blue = water going back, ink = difference */
+:root { --in: #c4352b; --back: #2a78d6; --flowc: #4a4f57; --tap: #12908c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --in: #e0604f; --back: #3987e5; --flowc: #c0c4ca; --tap: #3cc4bd; } }
+:root[data-theme="dark"] { --in: #e0604f; --back: #3987e5; --flowc: #c0c4ca; --tap: #3cc4bd; }
+/* hot tap water: a smart estimate, never a measurement */
+.tag.tap { color: var(--tap); border-color: color-mix(in srgb, var(--tap) 50%, transparent); }
+.tag.smart::before { content: "✦"; font-size: 10px; }
+.bars i b.tap { display: block; width: 100%; background: var(--tap); border-radius: 4px 4px 0 0; }
+.ptrack i.tap { background: var(--tap); top: 4px; bottom: 4px; border-radius: 2px; }
+.tapline { font-size: 12px; color: var(--ink-3); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.tapline b { color: var(--ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tapline .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+.how { font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+.how p { margin: 0 0 10px; }
+.how ul { margin: 0 0 10px; padding-left: 18px; }
+.likely { display: inline-flex; gap: 2px; vertical-align: middle; margin-right: 6px; }
+.likely i { width: 5px; height: 10px; border-radius: 1px; background: var(--grid); }
+.likely i.on { background: var(--tap); }
+.brand .logo { width: 20px; height: 20px; border-radius: 50%; background: var(--heat); display: grid; place-items: center; flex: none; }
+.brand .logo svg { width: 14px; height: 14px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; }
+.home-head .badge svg.i { width: 26px; height: 26px; stroke-width: 1.8; fill: none; stroke: currentColor; }
+.rcard .u { font-size: 18px; color: var(--ink-3); margin-left: 2px; font-weight: 400; letter-spacing: 0; }
+.rcard .st.good { color: var(--good-ink); font-weight: 600; }
+.rcard .st.warn { color: var(--warn-ink); font-weight: 600; }
+.rcard .lbl { display: inline-flex; align-items: center; gap: 6px; }
+.rcard .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.room-grid.metrics { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.now { display: grid; grid-template-columns: minmax(200px, 250px) 1fr; margin-bottom: 28px; overflow: hidden; }
+.now .nstate { padding: 18px 20px; display: flex; gap: 14px; align-items: center; border-right: 1px solid var(--line); }
+.now .nicon { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-2); color: var(--ink-3); flex: none; }
+.now .nicon svg { width: 26px; height: 26px; }
+.now.on .nicon { background: var(--heat); color: #fff; }
+.now .nl { font-size: 12px; color: var(--ink-3); }
+.now .nv { font-size: 28px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; }
+.now.on .nv { color: var(--heat-ink); }
+.now .ns { font-size: 12px; color: var(--ink-2); }
+.now .nbody { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.now .nmsg { font-size: 15px; }
+.now .nmsg b { font-weight: 600; }
+.now .nfacts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: var(--ink-3); }
+.now .nfacts b { color: var(--ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.now.stale .nv { color: var(--warn-ink); }
+.ptrack { position: relative; height: 14px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.btl { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+.ptrack i { position: absolute; top: 0; bottom: 0; background: var(--heat); }
+@media (max-width: 700px) {
+  .now { grid-template-columns: 1fr; }
+  .now .nstate { border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; }
+  .now .nbody { padding: 14px 16px; }
+}
+.temp-in { color: var(--in); } .temp-back { color: var(--back); }
+/* comparisons */
+.cmp { display: grid; grid-template-columns: minmax(120px, 210px) minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 14px 18px; border-top: 1px solid var(--line); }
+.cmp:first-child { border-top: 0; }
+.cmp .cl b { display: block; font-weight: 600; }
+.cmp .cl span { font-size: 12px; color: var(--ink-3); }
+.cmp .cb { display: grid; gap: 4px; min-width: 0; }
+.cmp .cb div { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 10px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.cmp .cb div span { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cmp .cb .bar { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.cmp .cb .bar i { display: block; height: 100%; border-radius: 4px; background: var(--heat); }
+.cmp .cb .prev .bar i { background: var(--ink-3); opacity: .55; }
+.cmp .cv { text-align: right; min-width: 110px; }
+.cmp .cv b { font-size: 15px; display: block; }
+.cmp .cv span { font-size: 12px; color: var(--ink-3); }
+.chg { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.chg.more { color: var(--heat-ink); background: color-mix(in srgb, var(--heat) 12%, transparent); }
+.chg.less { color: var(--good-ink); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.chg.same { color: var(--ink-2); background: var(--surface-2); }
+@media (max-width: 640px) {
+  .cmp { grid-template-columns: 1fr auto; grid-template-areas: "l v" "b b"; }
+  .cmp .cl { grid-area: l; } .cmp .cv { grid-area: v; } .cmp .cb { grid-area: b; margin-top: 6px; }
+}
+/* tables of readings with a plain explanation */
+.explain { width: 100%; border-collapse: collapse; }
+.explain td, .explain th { padding: 12px 16px; border-top: 1px solid var(--line); vertical-align: top; text-align: left; }
+.explain tr:first-child td, .explain tr:first-child th { border-top: 0; }
+.explain th { font-weight: 600; width: 32%; }
+.explain th span { display: block; font-weight: 400; font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.explain td.v { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; width: 22%; }
+.explain td.v span { display: block; font-weight: 400; font-size: 12px; color: var(--ink-3); }
+.explain td.m { color: var(--ink-2); }
+@media (max-width: 700px) {
+  .explain, .explain tbody, .explain tr { display: block; }
+  .explain tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .explain tr:first-child { border-top: 0; }
+  .explain td, .explain th { padding: 0; border: 0; width: auto !important; }
+  .explain td.m { grid-column: 1 / -1; font-size: 13px; margin-top: 4px; }
+  .explain td.v { text-align: right; }
+}
+pre.raw { margin: 0; padding: 14px 16px; overflow: auto; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink-2); max-height: 420px; }
+details.panel > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; }
+details.panel[open] > summary { border-bottom: 1px solid var(--line); }
+.ev { display: grid; grid-template-columns: 54px 20px 1fr; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--line); align-items: start; }
+.ev:first-child { border-top: 0; }
+.ev .when { color: var(--ink-3); font-size: 12px; padding-top: 1px; font-variant-numeric: tabular-nums; }
+.ev > .i { margin-top: 2px; color: var(--ink-3); }
+.ev.crit > .i { color: var(--crit); } .ev.good > .i { color: var(--good-ink); } .ev.warn > .i { color: var(--warn-ink); }
+.evday { padding: 8px 16px; background: var(--surface-2); font-size: 12px; font-weight: 600; color: var(--ink-2); border-top: 1px solid var(--line); }
+.evday:first-child { border-top: 0; border-radius: var(--radius) var(--radius) 0 0; }
+.two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+.kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; }
+.kv > div { display: contents; }
+.kv > div > * { padding: 9px 0; border-top: 1px solid var(--line); }
+.kv > div:first-child > * { border-top: 0; }
+.kv .k { color: var(--ink-2); }
+.kv .k small { display: block; color: var(--ink-3); font-size: 12px; }
+.kv .v { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kv .v small { display: block; color: var(--ink-3); font-size: 12px; font-weight: 400; }
+.panel h2 + .kv, .panel h2 + p { margin-top: 8px; }
+.setitem .lab span span { display: inline; margin: 0; font-size: inherit; }
+.setinput { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.setinput input { width: min(100%, 300px); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+.setinput input.short { width: 110px; }
+.setinput input:focus { outline: 2px solid var(--setpoint); outline-offset: 1px; }
+.setup-card { padding: 22px 24px; margin-bottom: 24px; display: grid; gap: 12px; max-width: 760px; }
+.setup-card h1 { font-size: 22px; }
+.setup-card p { margin: 0; color: var(--ink-2); }
+.drawer .lede { margin: 12px 0 0; }
+.drawer .explainer { color: var(--ink-2); line-height: 1.6; }
+.drawer .explainer p { margin: 0 0 10px; }
+.rating { display: grid; gap: 6px; margin: 14px 0 6px; }
+.rating .scale { position: relative; height: 10px; border-radius: 5px; }
+.rating .scale b { position: absolute; top: -4px; width: 3px; height: 18px; border-radius: 2px; background: var(--ink); transform: translateX(-1px); }
+.rating .marks { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
+.daybars { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; align-items: end; height: 70px; border-bottom: 1px solid var(--axis); }
+.daybars i { display: block; background: var(--heat); border-radius: 3px 3px 0 0; opacity: .85; }
+.daybars i.peak { opacity: 1; }
+a.dl { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: 13px; text-decoration: none; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: var(--surface); }
+a.dl:hover { color: var(--ink); border-color: var(--axis); }
+@media (max-width: 700px) {
+  #oo-runs thead { display: none; }
+  #oo-runs, #oo-runs tbody { display: block; }
+  #oo-runs tr:not(.group) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  #oo-runs tr.group { display: block; } #oo-runs tr.group td { display: block; padding: 8px 14px; }
+  #oo-runs td { display: block; padding: 0; border: 0; text-align: left; }
+  #oo-runs td:nth-child(2)::before { content: "– "; color: var(--ink-3); }
+  #oo-runs td:nth-child(3) { margin-left: auto; font-weight: 600; }
+  #oo-runs td:nth-child(n+4) { order: 2; font-size: 12px; color: var(--ink-2); }
+  #oo-runs tr:not(.group)::after { content: ""; order: 1; flex-basis: 100%; } /* details go onto their own line */
+  #oo-runs td:nth-child(5)::after, #oo-runs td:nth-child(6)::after { content: " kW"; }
+  #tw-table thead { display: none; }
+  #tw-table, #tw-table tbody { display: block; }
+  #tw-table tr:not(.group) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  #tw-table tr.group { display: block; } #tw-table tr.group td { display: block; padding: 8px 14px; }
+  #tw-table td { display: block; padding: 0; border: 0; text-align: left; }
+  #tw-table td:nth-child(3) { margin-left: auto; font-weight: 600; }
+  #tw-table td:nth-child(n+4) { order: 2; font-size: 12px; color: var(--ink-2); }
+  #tw-table td:nth-child(4)::after { content: " kW at most"; }
+  #tw-table td:nth-child(5)::before { content: "normal "; }
+  #tw-table td:nth-child(6)::before { content: "back "; }
+  #tw-table tr:not(.group)::after { content: ""; order: 1; flex-basis: 100%; }
+  #oo-runs td:nth-child(5)::before { content: "avg "; color: var(--ink-3); }
+  #oo-runs td:nth-child(6)::before { content: "max "; color: var(--ink-3); }
+}
+.est-note { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="m7 14 4-4 3 3 5-6"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-offline" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 4.2-2.6M10.7 5.1A15 15 0 0 1 22 8.8M5 12.5a10 10 0 0 1 3.3-2M15.5 10.7a10 10 0 0 1 3.5 1.8M8.5 16a5 5 0 0 1 7 0M12 20h.01M3 3l18 18"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01"/></symbol>
+  <symbol id="i-heat" viewBox="0 0 24 24"><path d="M8 3c-1.5 2 1.5 3.5 0 5.5M12 3c-1.5 2 1.5 3.5 0 5.5M16 3c-1.5 2 1.5 3.5 0 5.5"/><rect x="3" y="12" width="18" height="8" rx="2"/><path d="M7 12v8M12 12v8M17 12v8"/></symbol>
+  <symbol id="i-meter" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 15a5 5 0 0 1 10 0"/><path d="m12 15 2.5-3"/></symbol>
+  <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 9v7"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></symbol>
+</svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="logo" viewBox="0 0 24 24"><path d="M5 16a7 7 0 0 1 14 0"/><path d="m12 16 4-5"/></symbol></svg>
+
+<div class="auth" id="auth" hidden><div class="auth-card" role="dialog" aria-labelledby="auth-title">
+  <div class="brand"><span class="logo"><svg><use href="#logo"/></svg></span><span>Kamstrup Monitor</span></div>
+  <div id="auth-body" style="display:grid;gap:14px"></div>
+</div></div>
+<header class="topbar">
+  <a class="brand" href="#/home"><span class="logo"><svg><use href="#logo"/></svg></span><span>Kamstrup Monitor</span></a>
+  <button class="tstatus" id="t-status" aria-label="Connection status: open Settings"><span class="dot" id="t-dot"></span><span id="t-live">Connecting…</span></button>
+</header>
+<nav class="tabbar" id="tabbar" aria-label="Main">
+  <a href="#/home" data-p="home"><svg class="i"><use href="#i-home"/></svg><span>Home</span></a>
+  <a href="#/onoff" data-p="onoff"><svg class="i"><use href="#i-heat"/></svg><span>On/off</span></a>
+  <a href="#/usage" data-p="usage"><svg class="i"><use href="#i-bars"/></svg><span>Heat use</span></a>
+  <a href="#/temps" data-p="temps"><svg class="i"><use href="#i-chart"/></svg><span>Temperatures</span></a>
+  <button id="tb-more" aria-expanded="false" aria-controls="side"><svg class="i"><use href="#i-more"/></svg><span>More</span><i class="badge-dot" id="tb-badge" hidden></i></button>
+</nav>
+<div class="mscrim" id="mscrim"></div>
+<div class="shell">
+  <aside id="side" aria-label="Menu">
+    <div class="side-head"><div class="brand"><span class="logo"><svg><use href="#logo"/></svg></span><span>Kamstrup Monitor</span></div><button class="close side-close" id="side-close" aria-label="Close the menu">×</button></div>
+    <nav class="side" id="nav">
+      <a href="#/home" data-p="home"><svg class="i"><use href="#i-home"/></svg>Home</a>
+      <a href="#/onoff" data-p="onoff"><svg class="i"><use href="#i-heat"/></svg>Heat on/off</a>
+      <a href="#/usage" data-p="usage"><svg class="i"><use href="#i-bars"/></svg>Heat use</a>
+      <a href="#/temps" data-p="temps"><svg class="i"><use href="#i-chart"/></svg>Temperatures</a>
+      <div class="navlabel">Details</div>
+      <a href="#/meter" data-p="meter"><svg class="i"><use href="#i-meter"/></svg>Meter readings</a>
+      <a href="#/events" data-p="events"><svg class="i"><use href="#i-list"/></svg>Event log<span class="count" id="n-ev"></span></a>
+      <div class="navlabel">App</div>
+      <a href="#/settings" data-p="settings"><svg class="i"><use href="#i-settings"/></svg>Settings</a>
+    </nav>
+    <div class="meta">
+      <div class="theme" role="group" aria-label="Appearance"><button data-theme-set="light" title="Light" aria-label="Light">sun</button><button data-theme-set="auto" title="Same as this device" aria-label="Same as this device">auto</button><button data-theme-set="dark" title="Dark" aria-label="Dark">moon</button></div>
+      <a class="live" href="#/settings" title="Gateway settings"><span class="dot" id="m-dot"></span><span id="m-live">Connecting…</span></a>
+      <div><span>Last reading</span><span class="num" id="m-last">–</span></div>
+      <p class="disclaim"><a href="#/about">About and disclaimer</a> · not a Kamstrup product</p>
+    </div>
+  </aside>
+
+  <main>
+    <!-- ============================================================ HOME -->
+    <section class="page" id="p-home">
+      <div class="panel setup-card" id="setup" hidden></div>
+      <div id="home-main">
+        <div class="home-head" id="hh">
+          <div class="badge"><svg class="i"><use href="#i-heat"/></svg></div>
+          <div><h1 id="hh-title">Connecting…</h1><div class="sub" id="hh-sub">The first reading arrives within a minute.</div><div class="upd" id="hh-upd"></div></div>
+        </div>
+        <div class="panel now" id="now">
+          <div class="nstate"><div class="nicon"><svg class="i"><use href="#i-heat"/></svg></div><div><div class="nl">Heat</div><div class="nv num" id="now-v">–</div><div class="ns" id="now-s"></div></div></div>
+          <div class="nbody">
+            <div class="nmsg" id="now-msg">Waiting for the first reading.</div>
+            <div><div class="ptrack" id="now-track" title="When heat came in over the last 6 hours"></div><div class="btl"><span>6 h ago</span><span>3 h ago</span><span>now</span></div></div>
+            <div class="nfacts" id="now-facts"></div>
+          </div>
+        </div>
+        <div class="section" id="todo-sec" style="margin-top:0;margin-bottom:28px" hidden>
+          <div class="section-head"><h2>Worth a look</h2><span id="todo-hidden"></span></div>
+          <div class="panel" id="todo"></div>
+        </div>
+        <div class="section-head"><h2>Right now</h2><span class="small muted">Select a value to see what it means</span></div>
+        <div class="room-grid metrics" id="mgrid"></div>
+        <div class="section">
+          <div class="usage-grid">
+            <div class="panel ucard"><div class="l">Heat used today</div><div class="v num" id="u-today">–</div><div class="s" id="u-today-s"></div><div class="tapline" id="u-today-tap"></div>
+              <div class="bars" id="u-hours"></div><div class="axisrow"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div><div class="binfo muted" id="u-hours-i" aria-live="polite">Tap or point at a bar for details</div></div>
+            <div class="panel ucard"><div class="l">Last 7 days</div><div class="v num" id="u-week">–</div><div class="s" id="u-week-s"></div><div class="tapline" id="u-week-tap"></div>
+              <div class="bars week" id="u-days"></div><div class="axisrow week" id="u-days-ax"></div><div class="binfo muted" id="u-days-i" aria-live="polite">Tap or point at a bar for details</div></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-head"><h2>Compared with before</h2><span class="small muted">heat used in the same stretch of time</span></div>
+          <div class="panel" id="cmp"></div>
+          <a class="morelink" href="#/usage">See all heat use →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ HEAT ON/OFF -->
+    <section class="page" id="p-onoff">
+      <h1>Heat on/off</h1>
+      <p class="lede">Every time heat came in. Heat comes in when the heat valve in your delivery set opens: hot water then flows through the meter. That happens when the heating asks for heat, or when a hot tap or the shower runs: the meter measures both together. The dashboard recognises which part was <b>probably hot tap water</b> from the pattern in the readings.</p>
+      <div class="toolbar"><div class="seg range" id="oo-range"></div><span class="small muted" id="oo-loading"></span></div>
+      <div class="tiles" id="oo-tiles"></div>
+      <div class="panel pad">
+        <div class="chart-title"><h2>When heat came in</h2><span class="small muted">point at or tap the chart for values</span></div>
+        <div class="chart" id="oo-chart"></div>
+        <div class="legend" style="margin-top:8px"><span><i class="box" style="background:var(--heat)"></i>Heat coming in (hot water flowing)</span><span><i class="box" style="background:var(--tap)"></i>Probably hot tap water</span><span><i style="background:var(--heat-ink)"></i>Heat coming in, kW</span><span><i class="box" style="background:repeating-linear-gradient(135deg,var(--axis) 0 2px,transparent 2px 5px)"></i>No readings</span></div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Probably hot tap water <span class="tag tap smart">smart estimate</span></h2><span class="small muted" id="tw-n"></span></div>
+        <p class="small soft" id="tw-text" style="margin:0 0 12px"></p>
+        <div class="panel"><div class="tablewrap"><table class="data" id="tw-table"></table></div></div>
+        <details class="panel" style="margin-top:12px"><summary>How does the dashboard know?</summary><div class="pad how">
+          <p>It doesn't know for sure. Your meter measures all heat going into the heat unit, and that unit makes both the heating and the hot tap water. There is no separate reading for each. So the dashboard looks at the pattern, every time a reading comes in:</p>
+          <ul>
+            <li><b>It learns your home's normal heating level.</b> Floor heating is slow and steady, so the dashboard keeps a moving average of the heat coming in and of the temperature of the water going back, over about the last 40 minutes.</li>
+            <li><b>Hot tap water looks different.</b> When a shower or hot tap runs, the heat suddenly jumps (here often to 8–13 kW) while the water going back gets clearly colder. Cold tap water is cooling the heat unit. That combination is what it looks for.</li>
+            <li><b>It counts only the extra.</b> The heat above your normal heating level is counted as hot tap water; the rest stays heating. If your heat unit pauses the heating while the shower runs, the real share of hot water is a bit higher.</li>
+            <li><b>It rates how sure it is.</b> A big jump with a big temperature drop of a few minutes is <i>very likely</i> hot tap water; a small or long one is <i>possibly</i>. Anything longer than 45 minutes is taken to be the heating.</li>
+          </ul>
+          <p class="muted" style="margin:0">The meter reads about once a minute, so a tap that runs for less than a minute may be missed. For an exact split you would need a second meter on the hot tap water.</p>
+        </div></details>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Every time heat came in</h2><span class="small muted" id="oo-n"></span></div>
+        <div class="panel"><div class="tablewrap"><table class="data" id="oo-runs"></table></div></div>
+      </div>
+    </section>
+
+    <!-- ============================================================ HEAT USE -->
+    <section class="page" id="p-usage">
+      <h1>Heat use</h1>
+      <p class="lede">How much heat your home took from the district heating, worked out from the meter's own counter, the same number your energy company bills. Point at or tap a bar for details.</p>
+      <div class="toolbar"><div class="seg range" id="us-range"></div><div class="seg" id="us-group"></div><span class="small muted" id="us-loading"></span></div>
+      <div class="tiles" id="us-tiles"></div>
+      <div class="panel pad">
+        <div class="chart-title"><h2 id="us-title">Heat used</h2><span class="small muted" id="us-sub"></span></div>
+        <div class="chart" id="us-chart"></div>
+        <div class="legend" style="margin-top:8px"><span><i class="box" style="background:var(--heat)"></i>Heat used</span><span><i class="box" style="background:var(--tap)"></i>of which probably hot tap water (smart estimate)</span><span><i class="box" style="background:color-mix(in srgb,var(--heat) 45%,transparent)"></i>Estimated (the dashboard was off; spread evenly)</span><span><i class="box" style="background:repeating-linear-gradient(135deg,var(--axis) 0 2px,transparent 2px 5px)"></i>No readings</span></div>
+      </div>
+      <div class="section two-col">
+        <div class="panel pad">
+          <div class="chart-title"><h2>A typical day</h2><span class="small muted" id="ty-sub"></span></div>
+          <p class="small soft" id="ty-text" style="margin:0 0 12px"></p>
+          <div class="chart" id="ty-chart"></div>
+        </div>
+        <div class="panel pad">
+          <div class="chart-title"><h2>How well the heat is used</h2></div>
+          <p class="small soft" style="margin:0 0 12px">The difference between the hot water coming in and the water going back. The bigger it is, the more heat every litre gave your home.</p>
+          <div class="chart" id="dt-chart"></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Period by period</h2><a class="dl" href="api/export.csv" download><svg class="i"><use href="#i-download"/></svg>Download every reading (CSV)</a></div>
+        <div class="panel"><div class="tablewrap"><table class="data" id="us-table"></table></div></div>
+      </div>
+    </section>
+
+    <!-- ============================================================ TEMPERATURES -->
+    <section class="page" id="p-temps">
+      <h1>Temperatures and flow</h1>
+      <p class="lede">The hot water that arrives from the district heating (<b class="temp-in">in</b>) and the water that leaves your home again (<b class="temp-back">back</b>). Your home keeps the difference as heat. Point at or tap a chart for its values.</p>
+      <div class="toolbar"><div class="seg range" id="t-range"></div><span class="small muted" id="t-loading"></span></div>
+      <div class="panel pad" style="margin-bottom:12px">
+        <div class="chart-title"><h2>Hot water in and water going back</h2><div class="legend"><span><i style="background:var(--in)"></i>In</span><span><i style="background:var(--back)"></i>Back</span></div></div>
+        <div class="chart" id="t-temps"></div>
+      </div>
+      <div class="two-col">
+        <div class="panel pad">
+          <div class="chart-title"><h2>Heat coming in</h2><span class="small muted">kW</span></div>
+          <div class="chart" id="t-power"></div>
+        </div>
+        <div class="panel pad">
+          <div class="chart-title"><h2>Hot water flow</h2><span class="small muted">litres an hour</span></div>
+          <div class="chart" id="t-flow"></div>
+        </div>
+      </div>
+      <p class="small muted" style="margin-top:10px" id="t-note"></p>
+    </section>
+
+    <!-- ============================================================ METER -->
+    <section class="page" id="p-meter">
+      <h1>Meter readings</h1>
+      <p class="lede">Everything the gateway reads from your Kamstrup meter, with what each value means. The meter keeps its own records for this month and this year; those are shown as the meter reports them.</p>
+      <div class="section-head"><h2>The meter's counters</h2><span class="small muted" id="mt-when"></span></div>
+      <div class="panel"><table class="explain" id="mt-counters"></table></div>
+      <div class="section two-col">
+        <div class="panel pad"><h2>This month</h2><p class="small muted" style="margin:2px 0 0">The meter's own records</p><div class="kv" id="mt-month"></div></div>
+        <div class="panel pad"><h2>This year</h2><p class="small muted" style="margin:2px 0 0">The meter's own records</p><div class="kv" id="mt-year"></div></div>
+      </div>
+      <div class="section two-col">
+        <div class="panel pad"><h2>Since the meter was installed</h2><p class="small muted" style="margin:2px 0 0">Worked out from the meter's lifetime counters</p><div class="kv" id="mt-life"></div></div>
+        <div class="panel pad"><h2>Gateway</h2><p class="small muted" style="margin:2px 0 0">The Kamst-IR gateway that reads the meter</p><div class="kv" id="mt-gw"></div></div>
+      </div>
+      <div class="section">
+        <details class="panel"><summary>The gateway's full answer</summary><pre class="raw" id="mt-raw"></pre></details>
+      </div>
+    </section>
+
+    <!-- ============================================================ EVENTS -->
+    <section class="page" id="p-events">
+      <h1>Event log</h1>
+      <p class="lede">Things that happened to the meter and the gateway since this dashboard started recording: lost contact, restarts, firmware updates, alarms and events the meter logged itself. Newest first.</p>
+      <div class="panel" id="ev-list"></div>
+    </section>
+
+    <!-- ============================================================ SETTINGS -->
+    <section class="page" id="p-settings">
+      <h1>Settings</h1>
+      <p class="lede">Where the meter's data comes from and how it is shown. Changes are saved straight away and used without a restart.</p>
+      <div id="st-main"></div>
+    </section>
+
+    <!-- ============================================================ ABOUT -->
+    <section class="page" id="p-about">
+      <h1>About Kamstrup Monitor</h1>
+      <div class="about">
+        <p class="lede">A dashboard for a Kamstrup MULTICAL heat meter, read through the Kamst-IR gateway from Smart Gateways. It runs entirely in your home: it asks the gateway for the meter's values on your own network and keeps every reading on this computer.</p>
+        <h2>Not a Kamstrup or Smart Gateways product</h2>
+        <p>This is an independent project. It is not made, supported or endorsed by Kamstrup, Smart Gateways or your energy company. Kamstrup and MULTICAL are trademarks of their owners and are named only to say which meter this works with.</p>
+        <h2>Use at your own risk</h2>
+        <p>The software is provided as is, without any warranty. It only reads the gateway and never changes anything on it or on the meter. With sign-in switched off (Settings › Sign-in), everyone on your network can open the dashboard; keep it on a network you trust. Your energy company's bill and the meter's own display are always the reference; costs shown here are an estimate from the price you enter and leave out fixed charges.</p>
+        <h2>License</h2>
+        <p>Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU General Public License, version 3</a> or later. Copyright © 2026 the Kamstrup Monitor contributors.</p>
+        <h2>What the words mean</h2>
+        <ul>
+          <li><b>Heat used</b> (GJ or kWh): the energy your home took from the hot water, the number on your bill. 1 GJ is about 278 kWh.</li>
+          <li><b>Heat coming in</b> (kW): how fast heat is used right now.</li>
+          <li><b>Hot water in</b> and <b>water going back</b>: the temperatures of the water arriving from the district heating and leaving your home (supply and return).</li>
+          <li><b>Heat taken out</b>: the difference between those two. The bigger, the better the heat is used.</li>
+          <li><b>Flow</b>: litres of hot water per hour flowing through the meter.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-name"></div>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const icon = (id) => `<svg class="i"><use href="#i-${id}"/></svg>`;
+const RANGES = [["24 h", 24], ["7 d", 168], ["30 d", 720], ["90 d", 2160], ["1 y", 8760], ["All", 87600]];
+const GJ_KWH = 277.7778;
+const ON_KW = 0.05; // below this the meter is effectively idle
+
+let S = null;    // latest /api/state
+let SUM = null;  // /api/summary
+let S24 = null;  // 24 h series, for sparklines
+let TW24 = null; // probably hot tap water, last 24 h (a smart estimate)
+let R24 = null;  // every time heat came in, last 24 h
+let page = "home";
+
+/* ---------------------------------------------------------------- formatting */
+const now = () => Date.now() / 1000;
+const num = (v, d = 1) => (v == null || !isFinite(v) ? "–" : v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }));
+const f1 = (v) => num(v, 1);
+const f0 = (v) => num(v, 0);
+function ago(ts) {
+  if (!ts) return "never";
+  const s = Math.max(0, now() - ts);
+  if (s < 45) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+}
+const hhmm = (ts) => new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+const shortDate = (ts) => new Date(ts * 1000).toLocaleDateString([], { day: "numeric", month: "short" });
+const longDate = (ts) => new Date(ts * 1000).toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" });
+function dayLabel(ts) {
+  const d = new Date(ts * 1000).toDateString();
+  if (d === new Date().toDateString()) return "Today";
+  if (d === new Date(Date.now() - 86400000).toDateString()) return "Yesterday";
+  return new Date(ts * 1000).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+}
+function dur(min) {
+  if (min == null) return "–";
+  min = Math.round(min);
+  if (min < 60) return `${min} min`;
+  if (min >= 48 * 60) return `${num(min / 1440, 1)} d`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return `${h} h${m ? " " + m + " min" : ""}`;
+}
+const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+const unit = () => S?.settings?.unit || "GJ";
+/** energy in the chosen unit, from GJ */
+const inUnit = (gj) => (unit() === "kWh" ? gj * GJ_KWH : gj);
+function fmtE(gj, withUnit = true) {
+  if (gj == null || !isFinite(gj)) return "–";
+  const v = inUnit(gj), u = unit();
+  const d = u === "kWh" ? (v < 10 ? 1 : 0) : v < 0.1 ? 3 : v < 10 ? 2 : 1;
+  return num(v, d) + (withUnit ? ` ${u}` : "");
+}
+/** small amounts (one run) read better in kWh */
+/** the hot tap water split is always in kWh: the amounts are small, and both halves read alike */
+const tapE = (kwh) => (kwh == null ? "–" : `${num(kwh, kwh < 10 ? 1 : 0)} kWh`);
+const LIKELY = { "very likely": 3, likely: 2, possibly: 1 };
+const likelyHTML = (l) => `<span class="likely" title="${esc(l)}">${[1, 2, 3].map((n) => `<i class="${n <= (LIKELY[l] || 0) ? "on" : ""}"></i>`).join("")}</span>${esc(l)}`;
+const tapNow = () => (TW24?.now && usingHeat() ? TW24.now : null);
+const smallE = (gj) => (gj == null ? "–" : unit() === "GJ" && gj < 0.01 ? `${num(gj * GJ_KWH, 1)} kWh` : fmtE(gj));
+function altE(gj) { // the other unit, for a hint
+  if (gj == null) return "";
+  return unit() === "kWh" ? `${num(gj, gj < 0.1 ? 3 : 2)} GJ` : `${num(gj * GJ_KWH, gj * GJ_KWH < 10 ? 1 : 0)} kWh`;
+}
+function money(gj) {
+  const p = S?.settings?.price_per_gj;
+  if (!p || gj == null) return "";
+  return `${S.settings.currency} ${num(gj * p, 2)}`;
+}
+const pct = (a, b) => (b > 0 ? Math.round((a / b - 1) * 100) : null);
+const andList = (a) => (a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a.at(-1)}`);
+/** the meter writes dates as YYMMDD (e.g. 261108.00); 0 means no date */
+function meterDate(v) {
+  if (!v) return null;
+  const s = String(Math.round(v)).padStart(6, "0");
+  const d = new Date(2000 + +s.slice(0, 2), +s.slice(2, 4) - 1, +s.slice(4, 6));
+  return isNaN(d) ? null : d.getTime() / 1000;
+}
+const R = () => (S && S.reading) || {};
+// heat is on when hot water flows through the meter (the heat valve is open), the same rule as the server's runs
+const usingHeat = (r = R()) => (r.flow || 0) > 0 || (r.power || 0) >= ON_KW;
+
+/* ratings in plain words: [label, css class] */
+function rateDiff(dt, flow) {
+  if (dt == null || !(flow > 0)) return null;
+  return dt >= 25 ? ["Good", "good"] : dt >= 15 ? ["OK", ""] : ["Low", "warn"];
+}
+function rateBack(t2, flow) {
+  if (t2 == null || !(flow > 0)) return null;
+  return t2 <= 40 ? ["Nice and cool", "good"] : t2 <= 50 ? ["Fine", ""] : ["Quite warm", "warn"];
+}
+function wifiWords(rssi) {
+  if (rssi == null || rssi === 0) return ["unknown", 0];
+  return rssi >= -60 ? ["excellent", 4] : rssi >= -67 ? ["good", 3] : rssi >= -75 ? ["fair", 2] : rssi >= -82 ? ["weak", 1] : ["very weak", 1];
+}
+function sigBars(lvl) { return `<span class="sig">${[4, 7, 10, 12].map((h, i) => `<i class="${i < lvl ? "on" : ""}" style="height:${h}px"></i>`).join("")}</span>`; }
+
+/* ---------------------------------------------------------------- chart engine */
+const chartSizes = new ResizeObserver((entries) => {
+  for (const e of entries) {
+    const host = e.target;
+    if (!host._redraw || !host._c || Math.abs(host.clientWidth - host._c.W) < 1 || !host.clientWidth) continue;
+    cancelAnimationFrame(host._raf);
+    host._raf = requestAnimationFrame(() => host._redraw());
+  }
+});
+function makeChart(host, height) {
+  if (!host._c) {
+    host.innerHTML = `<canvas></canvas><canvas class="ov"></canvas><div class="tip"></div>`;
+    host._c = { cv: host.children[0], ov: host.children[1], tip: host.children[2] };
+    host.addEventListener("pointerleave", (e) => { if (e.pointerType === "touch") e.stopImmediatePropagation(); });
+    host.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse" && host.onpointermove) host.onpointermove(e); });
+    chartSizes.observe(host);
+  }
+  const c = host._c, dpr = window.devicePixelRatio || 1, W = host.clientWidth;
+  for (const cv of [c.cv, c.ov]) { cv.style.height = height + "px"; cv.width = W * dpr; cv.height = height * dpr; cv.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0); }
+  c.W = W; c.H = height;
+  return c;
+}
+function timeTicks(t0, t1) {
+  const D = 86400, span = t1 - t0;
+  const step = span > 400 * D ? 90 * D : span > 120 * D ? 30 * D : span > 20 * D ? 7 * D : span > 4 * D ? D : span > D ? 6 * 3600 : span > 6 * 3600 ? 3 * 3600 : 3600;
+  const off = new Date().getTimezoneOffset() * 60, out = [];
+  for (let t = Math.ceil((t0 - off) / step) * step + off; t < t1; t += step) {
+    const d = new Date(t * 1000);
+    out.push([t, step >= 7 * D ? d.toLocaleDateString([], { day: "numeric", month: "short" }) : step >= D ? d.toLocaleDateString([], { weekday: "short", day: "numeric" }) : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })]);
+  }
+  return out;
+}
+function nearest(pts, t) {
+  if (!pts || !pts.length) return null;
+  let lo = 0, hi = pts.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (pts[m][0] < t) lo = m; else hi = m; }
+  return Math.abs(pts[lo][0] - t) <= Math.abs(pts[hi][0] - t) ? pts[lo] : pts[hi];
+}
+const tipTime = (t, span) => (span > 2 * 86400 ? `${shortDate(t)} ${hhmm(t)}` : hhmm(t));
+function placeTip(c, px, py) {
+  c.tip.style.display = "block";
+  const tw = c.tip.offsetWidth, th = c.tip.offsetHeight;
+  c.tip.style.left = (px + 14 + tw > c.W ? Math.max(0, px - tw - 14) : px + 14) + "px";
+  c.tip.style.top = Math.max(0, Math.min(py - 20, c.H - th)) + "px";
+}
+function drawTicks(g, ticks, x, lo, hi, H) {
+  let last = -1e9;
+  for (const [t, lab] of ticks) {
+    const px = x(t), half = g.measureText(lab).width / 2;
+    if (px - half < lo || px + half > hi || px - half < last + 10) continue;
+    g.fillText(lab, px, H - 5); last = px + half;
+  }
+}
+function niceStep(span, count = 4) {
+  const raw = span / count, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))), n = raw / mag;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+}
+function emptyChart(host, height, text) {
+  host._redraw = () => emptyChart(host, height, text);
+  const c = makeChart(host, height), g = c.cv.getContext("2d");
+  g.clearRect(0, 0, c.W, c.H); g.fillStyle = css("--ink-3"); g.font = "13px system-ui, -apple-system, sans-serif"; g.textAlign = "center";
+  g.fillText(text, c.W / 2, c.H / 2);
+  host.onpointermove = host.onpointerleave = null;
+}
+
+/** Line chart with one y-axis, crosshair and a tooltip that lists every series at the hovered time. */
+function lineChart(host, o) {
+  host._redraw = () => lineChart(host, o);
+  if (!o.series.some((s) => s.pts.length)) return emptyChart(host, o.height || 220, "No readings in this period yet");
+  const c = makeChart(host, o.height || 220);
+  const g = c.cv.getContext("2d"), W = c.W, H = c.H;
+  const L = 40, Rr = 10, T = 8, B = 22, w = W - L - Rr, h = H - T - B;
+  const all = o.series.flatMap((s) => s.pts.map((p) => p[1]));
+  let lo = o.yMin ?? Math.floor(Math.min(...all) - (o.pad ?? 1)), hi = o.yMax ?? Math.ceil(Math.max(...all) + (o.pad ?? 1));
+  if (o.yMinMax != null) hi = Math.max(hi, o.yMinMax);
+  if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 10; }
+  if (hi - lo < 2) { hi += 1; lo -= 1; }
+  const bw = o.bucket || 60;
+  const x = (t) => L + ((t - o.t0) / (o.t1 - o.t0)) * w, y = (v) => T + h - ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * h;
+  g.clearRect(0, 0, W, H);
+  g.font = "11px system-ui, -apple-system, sans-serif"; g.textBaseline = "middle";
+  const stepY = niceStep(hi - lo);
+  g.strokeStyle = css("--grid"); g.lineWidth = 1; g.fillStyle = css("--ink-3");
+  for (let v = Math.ceil(lo / stepY) * stepY; v <= hi + 1e-9; v += stepY) {
+    const yy = Math.round(y(v)) + 0.5;
+    g.beginPath(); g.moveTo(L, yy); g.lineTo(L + w, yy); g.stroke();
+    g.textAlign = "right"; g.fillText(`${+v.toFixed(2)}${o.unit || ""}`, L - 6, yy);
+  }
+  g.strokeStyle = css("--axis"); g.beginPath(); g.moveTo(L, T + h + 0.5); g.lineTo(L + w, T + h + 0.5); g.stroke();
+  g.textAlign = "center"; g.textBaseline = "alphabetic";
+  drawTicks(g, timeTicks(o.t0, o.t1), x, L, L + w, H);
+  for (const s of o.series) {
+    if (!s.pts.length) continue;
+    const segs = [];
+    let cur = null, prev = null;
+    for (const p of s.pts) {
+      if (!prev || p[0] - prev[0] > bw * 4) { cur = []; segs.push(cur); }
+      cur.push(p); prev = p;
+    }
+    for (const seg of segs) {
+      const path = new Path2D();
+      seg.forEach(([t, v], i) => (i ? path.lineTo(x(t), y(v)) : path.moveTo(x(t), y(v))));
+      if (seg.length === 1) { path.lineTo(x(seg[0][0] + bw), y(seg[0][1])); }
+      if (s.area) {
+        const a = new Path2D(path); a.lineTo(x(seg.at(-1)[0] + (seg.length === 1 ? bw : 0)), y(lo)); a.lineTo(x(seg[0][0]), y(lo)); a.closePath();
+        g.globalAlpha = 0.16; g.fillStyle = s.color; g.fill(a); g.globalAlpha = 1;
+      }
+      g.strokeStyle = s.color; g.lineWidth = s.width || 2; g.lineJoin = "round"; g.setLineDash(s.dash || []); g.stroke(path); g.setLineDash([]);
+    }
+  }
+  host.onpointerleave = () => { c.ov.getContext("2d").clearRect(0, 0, W, H); c.tip.style.display = "none"; };
+  host.onpointermove = (e) => {
+    const r = host.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+    if (px < L || px > L + w) return host.onpointerleave();
+    const t = o.t0 + ((px - L) / w) * (o.t1 - o.t0);
+    const og = c.ov.getContext("2d"); og.clearRect(0, 0, W, H);
+    let snap = null; for (const s of o.series) { const p = nearest(s.pts, t); if (p && Math.abs(p[0] - t) < bw * 3) { snap = p[0]; break; } }
+    if (snap == null) return host.onpointerleave();
+    const rows = [];
+    for (const s of o.series) {
+      const p = nearest(s.pts, snap);
+      if (!p || p[0] !== snap) continue;
+      rows.push(`<div class="r"><i style="background:${s.color}"></i><b>${num(p[1], s.decimals ?? o.decimals ?? 1)}${s.unit ?? o.unit ?? ""}</b><span>${esc(s.name)}</span></div>`);
+      og.fillStyle = s.color; og.beginPath(); og.arc(x(snap), y(p[1]), 3.5, 0, 7); og.fill();
+    }
+    og.strokeStyle = css("--axis"); og.lineWidth = 1; og.beginPath(); og.moveTo(Math.round(x(snap)) + .5, T); og.lineTo(Math.round(x(snap)) + .5, T + h); og.stroke();
+    const extra = o.extra ? o.extra(snap) : "";
+    c.tip.innerHTML = `<div class="h">${tipTime(snap, o.t1 - o.t0)}</div>${rows.join("")}${extra}`;
+    placeTip(c, px, py);
+  };
+}
+
+function hatchPattern(g, color) {
+  const p = document.createElement("canvas"); p.width = p.height = 6;
+  const q = p.getContext("2d"); q.strokeStyle = color; q.lineWidth = 1.2;
+  q.beginPath(); q.moveTo(-1, 7); q.lineTo(7, -1); q.moveTo(5, 7); q.lineTo(7, 5); q.moveTo(-1, 1); q.lineTo(1, -1); q.stroke();
+  return g.createPattern(p, "repeat");
+}
+/** Bar chart. o.bars: [{v, est, nodata, label, tick}], o.tip(i) -> html, o.fmt(v) for the axis. */
+function barChart(host, o) {
+  host._redraw = () => barChart(host, o);
+  const c = makeChart(host, o.height || 220), g = c.cv.getContext("2d"), W = c.W, H = c.H;
+  const L = 48, Rr = 8, T = 18, B = 22, w = W - L - Rr, h = H - T - B, n = o.bars.length;
+  const max = Math.max(...o.bars.map((b) => (b.nodata ? 0 : b.v || 0)), o.minMax || 0) || 1;
+  const step = niceStep(max), top = Math.ceil(max / step) * step;
+  const y = (v) => T + h - (v / top) * h, bw = w / Math.max(1, n), gap = Math.min(6, bw * 0.22);
+  g.clearRect(0, 0, W, H);
+  g.font = "11px system-ui, -apple-system, sans-serif"; g.textBaseline = "middle"; g.lineWidth = 1;
+  for (let v = 0; v <= top + 1e-9; v += step) {
+    const yy = Math.round(y(v)) + 0.5;
+    g.strokeStyle = v ? css("--grid") : css("--axis"); g.beginPath(); g.moveTo(L, yy); g.lineTo(L + w, yy); g.stroke();
+    g.fillStyle = css("--ink-3"); g.textAlign = "right"; g.fillText(o.fmt(v), L - 6, yy);
+  }
+  const heat = css("--heat"), hatch = hatchPattern(g, css("--axis"));
+  o.bars.forEach((b, i) => {
+    const x0 = L + i * bw + gap / 2, bwid = Math.max(1, bw - gap);
+    if (b.nodata) { g.fillStyle = hatch; g.globalAlpha = .7; g.fillRect(x0, T, bwid, h); g.globalAlpha = 1; return; }
+    const v = b.v || 0; if (!v) return;
+    const yy = y(v), r = Math.min(4, bwid / 3);
+    g.fillStyle = heat; g.globalAlpha = b.est ? 0.45 : 1;
+    g.beginPath(); g.moveTo(x0, T + h); g.lineTo(x0, yy + r); g.quadraticCurveTo(x0, yy, x0 + r, yy); g.lineTo(x0 + bwid - r, yy); g.quadraticCurveTo(x0 + bwid, yy, x0 + bwid, yy + r); g.lineTo(x0 + bwid, T + h); g.fill();
+    if (b.part > 0) { // the top part in another colour, e.g. probably hot tap water
+      g.save(); g.clip(); g.fillStyle = css("--tap"); g.fillRect(x0, yy, bwid, Math.max(1.5, y(Math.max(0, v - b.part)) - yy)); g.restore();
+    }
+    g.globalAlpha = 1;
+  });
+  g.fillStyle = css("--ink-3"); g.textAlign = "center"; g.textBaseline = "alphabetic";
+  const every = Math.max(1, Math.ceil(n / Math.max(1, w / (o.tickWidth || 64))));
+  o.bars.forEach((b, i) => { if (b.tick && (i % every === 0)) g.fillText(b.tick, L + (i + .5) * bw, H - 5); });
+  host.onpointerleave = () => { c.ov.getContext("2d").clearRect(0, 0, W, H); c.tip.style.display = "none"; };
+  host.onpointermove = (e) => {
+    const r = host.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+    const i = Math.floor((px - L) / bw);
+    if (px < L || i < 0 || i >= n) return host.onpointerleave();
+    const og = c.ov.getContext("2d"); og.clearRect(0, 0, W, H);
+    og.fillStyle = css("--hover"); og.globalAlpha = 1; og.fillRect(L + i * bw, T - 6, bw, h + 6);
+    og.strokeStyle = css("--ink-3"); og.strokeRect(L + i * bw + .5, T - 5.5, bw - 1, h + 5);
+    c.tip.innerHTML = o.tip(i);
+    placeTip(c, px, py);
+  };
+}
+
+function sparkline(cv, pts, color, t0, t1, opts = {}) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 150, H = cv.clientHeight || 26;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (!pts || !pts.length) { g.fillStyle = css("--ink-3"); g.font = "11px system-ui"; g.fillText("collecting history…", 0, H / 2 + 4); return; }
+  const vals = pts.map((p) => p[1]);
+  let lo = opts.zero ? 0 : Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < (opts.minSpan || 1)) { const m = (hi + lo) / 2; lo = opts.zero ? 0 : m - (opts.minSpan || 1) / 2; hi = lo + (opts.minSpan || 1); }
+  const x = (t) => ((t - t0) / (t1 - t0)) * (W - 6) + 2, y = (v) => H - 3 - ((v - lo) / (hi - lo)) * (H - 6);
+  g.strokeStyle = color; g.lineWidth = 1.75; g.lineJoin = "round"; g.beginPath();
+  pts.forEach(([t, v], i) => (i ? g.lineTo(x(t), y(v)) : g.moveTo(x(t), y(v))));
+  g.stroke();
+  if (opts.zero) { g.lineTo(x(pts.at(-1)[0]), H - 3); g.lineTo(x(pts[0][0]), H - 3); g.closePath(); g.globalAlpha = .14; g.fillStyle = color; g.fill(); g.globalAlpha = 1; }
+  const last = pts.at(-1); g.fillStyle = color; g.beginPath(); g.arc(x(last[0]), y(last[1]), 2.5, 0, 7); g.fill();
+}
+
+/* ---------------------------------------------------------------- data helpers */
+const api = (p) => fetch(p).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+async function postJSON(url, body) {
+  try { const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); return await r.json(); }
+  catch (e) { return { ok: false, error: "the dashboard did not answer" }; }
+}
+const rangeState = { usage: 720, temps: 24, drawer: 24, onoff: 24 };
+function buildRange(el, key, onchange, ranges = RANGES) {
+  el.innerHTML = ranges.map(([l, h]) => `<button data-h="${h}" class="${h === rangeState[key] ? "on" : ""}">${l}</button>`).join("");
+  el.onclick = (e) => { const b = e.target.closest("button"); if (!b) return; rangeState[key] = +b.dataset.h; $$("button", el).forEach((x) => x.classList.toggle("on", x === b)); onchange(); };
+}
+
+/* ---------------------------------------------------------------- sidebar status */
+function connState() {
+  if (!S) return ["", "Connecting…", "Connecting…"];
+  const st = S.status;
+  if (!S.settings.gateway) return ["warn", "No gateway set", "Set up"];
+  if (st.connected === false) return ["crit", "Gateway not answering", "Offline"];
+  if (st.connected === null && !S.ts) return ["warn", "Waiting for the gateway", "Waiting"];
+  const fresh = S.ts && now() - S.ts < Math.max(600, S.settings.poll_interval * 4);
+  return fresh ? ["good", "Live", "Live"] : ["warn", "No recent readings", "Quiet"];
+}
+function renderMeta() {
+  const [cls, long, short] = connState();
+  $("#m-dot").className = $("#t-dot").className = "dot " + cls;
+  $("#m-live").textContent = long; $("#t-live").textContent = short;
+  $("#m-last").textContent = S?.ts ? ago(S.ts) : "–";
+  $("#tb-badge").hidden = !(cls === "crit");
+}
+
+/* ---------------------------------------------------------------- worth a look */
+function hidden() { try { return JSON.parse(localStorage.getItem("hiddenTodos") || "[]"); } catch { return []; } }
+function setHidden(list) { try { localStorage.setItem("hiddenTodos", JSON.stringify(list)); } catch { /* private mode */ } }
+let showHidden = false;
+function todos() {
+  const out = [], r = R(), st = S.status;
+  if (st.connected === false) out.push({ id: "offline", lvl: "crit", ic: "offline", title: "The gateway is not answering", text: `${cap(st.error || "no answer")}. Last reading ${ago(S.ts)}. Check that the gateway has power and WiFi, or change its address in Settings. Nothing is lost: the meter keeps counting, and the use in between is filled in when the gateway answers again.` });
+  if (r.leak_burst) out.push({ id: "leak", lvl: "crit", ic: "alert", title: "The meter reports a leak or burst", text: `Alarm code ${r.leak_burst}. Check for water around the heat delivery set and the pipes, and call your energy company if you find a leak.` });
+  if (r.wifi_rssi && r.wifi_rssi <= -80) out.push({ id: "wifi", lvl: "warn", ic: "wifi", title: "The gateway's WiFi signal is weak", text: `${r.wifi_rssi} dBm (${wifiWords(r.wifi_rssi)[0]}). Readings may drop out now and then. A WiFi extender or moving the router closer to the meter helps.` });
+  const l24 = SUM?.last24;
+  if (l24 && l24.energy > 0.01 && l24.dt != null && l24.dt < 15 && l24.t2 > 45) out.push({ id: `warmback-${new Date().toDateString()}`, lvl: "warn", ic: "thermo", title: "The water goes back quite warm", text: `In the last 24 hours the water left your home at ${f0(l24.t2)}° on average, only ${f0(l24.dt)}° cooler than it came in. Radiators turned fully open everywhere, or a system that isn't balanced, let hot water flow through without giving off its heat. Some energy companies charge extra for this.` });
+  if (r.firmware_update_available === true) out.push({ id: `fw-${r.firmware_available}`, lvl: "info", ic: "chip", title: "A gateway update is available", text: `Firmware ${r.firmware_available} (now running ${r.firmware_running}). Install it from the gateway's own web page.` });
+  return out;
+}
+function renderTodos() {
+  const all = todos(), hid = hidden();
+  const vis = showHidden ? all : all.filter((t) => !hid.includes(t.id) || t.lvl === "crit");
+  const nHid = all.length - all.filter((t) => !hid.includes(t.id) || t.lvl === "crit").length;
+  $("#todo-sec").hidden = !vis.length && !nHid;
+  $("#todo-hidden").innerHTML = nHid ? `<button class="showhidden" id="todo-toggle">${showHidden ? "Hide dismissed" : `Show ${nHid} dismissed`}</button>` : "";
+  $("#todo").innerHTML = vis.length ? vis.map((t) => `<div class="todo ${t.lvl}"><div class="ic">${icon(t.ic)}</div><div><div class="ti">${esc(t.title)}</div><div class="tx">${esc(t.text)}</div></div>${t.lvl === "crit" ? "" : `<button class="hide" data-id="${esc(t.id)}">${hid.includes(t.id) ? "Show" : "Dismiss"}</button>`}</div>`).join("")
+    : `<div class="todo"><div class="ic">${icon("check")}</div><div><div class="ti">Nothing needs your attention</div><div class="tx">You dismissed ${nHid} note${nHid === 1 ? "" : "s"}.</div></div></div>`;
+}
+$("#todo").onclick = (e) => {
+  const b = e.target.closest("button.hide"); if (!b) return;
+  const h = hidden(), id = b.dataset.id;
+  setHidden(h.includes(id) ? h.filter((x) => x !== id) : [...h, id]); renderTodos();
+};
+$("#todo-sec").addEventListener("click", (e) => { if (e.target.id === "todo-toggle") { showHidden = !showHidden; renderTodos(); } });
+
+/* ---------------------------------------------------------------- metric definitions */
+const METRICS = {
+  power: { name: "Heat coming in", short: "Heat", unit: " kW", u: "kW", dec: 1, color: "--heat", zero: true, minSpan: 1,
+    state: (r) => (usingHeat(r) ? ["Coming in", "heat"] : r.power != null ? ["Nothing coming in", ""] : ["–", ""]),
+    explain: `<p>How much heat your home takes from the district heating <b>right now</b>, in kilowatts (kW). Think of it as the speedometer; <b>heat used</b> (GJ or kWh) is the odometer.</p>
+      <p>Using 1 kW for one hour is 1 kWh of heat; 278 kWh make 1 GJ. It goes up when radiators warm up or a hot tap runs (if your hot water also comes from the district heating), and drops to 0 when nothing asks for heat.</p>` },
+  temp1: { name: "Hot water in", short: "In", unit: "°", u: "°", dec: 1, color: "--in", minSpan: 4,
+    state: (r) => (r.temp1 != null ? ["From the district heating", ""] : ["–", ""]),
+    explain: `<p>The temperature of the hot water arriving from the district heating (the <b>supply</b>, or <i>aanvoer</i>). Your energy company sets it, not you; it is often hotter in cold weather.</p>
+      <p>When no hot water has flowed for a while, the pipe cools down and this value drops. That's normal.</p>` },
+  temp2: { name: "Water going back", short: "Back", unit: "°", u: "°", dec: 1, color: "--back", minSpan: 4,
+    state: (r) => rateBack(r.temp2, r.flow) || (r.temp2 != null ? ["No flow right now", ""] : ["–", ""]),
+    explain: `<p>The temperature of the water as it leaves your home and goes back to the district heating (the <b>return</b>, or <i>retour</i>). <b>Lower is better</b>: it means your radiators and hot tap water took most of the heat out of it.</p>
+      <p>Under about 40° is good. Water that goes back much warmer than 50° usually means radiators are turned fully open everywhere or the system isn't balanced, so hot water rushes through without giving off its heat.</p>`,
+    scale: { lo: 20, hi: 70, stops: [[20, "--good"], [40, "--good"], [50, "--warn"], [70, "--hot"]], marks: ["20°", "40° good", "50°", "70°"] } },
+  tempdiff: { name: "Heat taken out", short: "Taken out", unit: "°", u: "°", dec: 1, color: "--flowc", minSpan: 4,
+    state: (r) => rateDiff(r.tempdiff, r.flow) || (r.tempdiff != null ? ["No flow right now", ""] : ["–", ""]),
+    explain: `<p>How many degrees cooler the water leaves than it came in. This is the heat your home kept. <b>Bigger is better</b>: every litre then brings more heat, so less water has to be pumped round.</p>
+      <p>25° or more is good. Under 15° while heat is being used means water flows through without giving off much heat (see <i>water going back</i>).</p>`,
+    scale: { lo: 0, hi: 45, stops: [[0, "--hot"], [15, "--warn"], [25, "--good"], [45, "--good"]], marks: ["0°", "15°", "25° good", "45°"] } },
+  flow: { name: "Hot water flow", short: "Flow", unit: " l/h", u: "l/h", dec: 0, color: "--flowc", zero: true, minSpan: 20,
+    state: (r) => (r.flow > 0 ? [`${f0(r.flow / 60)} litre${Math.round(r.flow / 60) === 1 ? "" : "s"} a minute`, ""] : r.flow != null ? ["Not flowing", ""] : ["–", ""]),
+    explain: `<p>How much hot water flows through the meter, in litres per hour. Water only flows when something asks for heat: radiators, floor heating or, if your hot water also comes from the district heating, a hot tap or the shower.</p>
+      <p>Short high peaks are often a shower or a tap; long steady flow is usually the heating.</p>` },
+};
+const MORDER = ["power", "temp1", "temp2", "tempdiff", "flow"];
+
+/* ---------------------------------------------------------------- home */
+function setupHTML(prefill) {
+  return `<h1>Connect your Kamst-IR gateway</h1>
+    <p>Enter the IP address of the gateway on your meter, for example <span class="mono">192.168.1.50</span>, or with its port, <span class="mono">192.168.1.50:82</span>. You find it in your router's list of devices, or on the gateway's label.</p>
+    <div class="setinput"><input id="su-gw" placeholder="192.168.1.50:82" value="${esc(prefill || "")}" autocomplete="off" spellcheck="false"><button class="btn ghost" id="su-test">Test</button><button class="btn" id="su-save">Use this address</button></div>
+    <div class="ctl-msg" id="su-msg" aria-live="polite"></div>`;
+}
+function bindGatewayForm(prefix, after) {
+  const msg = $(`#${prefix}-msg`), input = $(`#${prefix}-gw`);
+  const say = (cls, html) => { msg.className = "ctl-msg " + cls; msg.innerHTML = html; };
+  $(`#${prefix}-test`).onclick = async () => {
+    say("", "Asking the gateway…");
+    const r = await postJSON("api/settings/test", { gateway: input.value });
+    if (r.ok) say("ok", `${icon("check")}Found it: ${esc(r.model || "Kamst-IR gateway")}, the meter reads ${esc(fmtE(r.heat_energy))}${r.power != null ? ` and ${esc(f1(r.power))} kW right now` : ""}.`);
+    else say("err", `${icon("alert")}${esc(cap(r.error || "no answer"))}${r.url ? ` <span class="muted">(${esc(r.url)})</span>` : ""}`);
+  };
+  $(`#${prefix}-save`).onclick = async () => {
+    say("", "Saving…");
+    const r = await postJSON("api/settings", { gateway: input.value });
+    if (!r.ok) return say("err", `${icon("alert")}${esc(cap(r.error || "could not save"))}`);
+    say("ok", `${icon("check")}Saved. Reading the meter at ${esc(r.values.gateway)}…`);
+    await refreshState(); after && after(r);
+  };
+  input.onkeydown = (e) => { if (e.key === "Enter") $(`#${prefix}-save`).click(); };
+}
+
+function renderHome() {
+  const r = R(), st = S.status, has = S.ts != null;
+  const needSetup = !S.settings.gateway;
+  $("#setup").hidden = !needSetup;
+  if (needSetup && !$("#su-gw")) { $("#setup").innerHTML = setupHTML(""); bindGatewayForm("su", () => renderHome()); }
+  $("#home-main").hidden = needSetup && !has;
+  if (needSetup && !has) return;
+  const on = usingHeat(r), stale = st.connected === false;
+  // headline
+  const hh = $("#hh");
+  hh.classList.toggle("heating", on && !stale);
+  if (!has) { $("#hh-title").textContent = st.connected === false ? "Can't reach the gateway" : "Waiting for the first reading"; $("#hh-sub").textContent = st.error ? cap(st.error) : "The gateway reads the meter about once a minute."; $("#hh-upd").textContent = ""; }
+  else {
+    $("#hh-title").textContent = stale ? "Not up to date" : on ? (tapNow() ? "Probably hot tap water" : "District heating is delivering heat") : "No heat from the district heating";
+    const peak = r.maxpower_m;
+    let sub;
+    if (on) {
+      const share = peak > 0 ? r.power / peak : null;
+      const level = share == null ? "" : share < 0.25 ? ", a little" : share < 0.6 ? `, about ${share < 0.4 ? "a third" : "half"} of the most this month` : share < 0.95 ? ", close to the most this month" : ", the most this month";
+      sub = r.power >= ON_KW ? `Hot water from the district heating is flowing in, giving <b>${f1(r.power)} kW</b> of heat${level}.` : "Hot water is flowing in, but it gives off almost no heat yet.";
+      const tw = tapNow();
+      if (tw) sub += ` <span class="tag tap smart">smart estimate</span> This is <b>${esc(tw.label)}</b> a hot tap or shower: the heat jumped above your normal ${f1(tw.normal_kw)} kW and the water going back got colder.`;
+    } else sub = "No hot water is flowing in: the heat valve is closed, because the heating and the hot taps don't ask for heat.";
+    if (stale) sub = `The gateway stopped answering ${ago(st.last_ok || S.ts)}. These are the last values it sent.`;
+    $("#hh-sub").innerHTML = sub;
+    $("#hh-upd").innerHTML = `<span>Updated ${ago(S.ts)}</span><span>·</span><span>The meter reads <b class="num">${num(r.heat_energy, 3)} GJ</b> in total</span>`;
+  }
+  renderNow(r, on, stale);
+  renderTodos();
+  renderMetrics(r);
+  renderUsageCards();
+  renderCompare();
+}
+
+/** [the run going on now or the last one, whether it's still on]; runs are newest first */
+function lastRun() { const r = R24?.runs?.[0]; return r ? [r, !!r.ongoing] : [null, false]; }
+/** total on-time and number of times on since t0, from the 24 h runs */
+function onSinceT(t0) {
+  let s = 0, n = 0;
+  for (const r of R24?.runs || []) { const a = Math.max(r.start, t0), b = Math.min(r.ongoing ? now() : r.end, now()); if (b > a) { s += b - a; n++; } }
+  return [s / 60, n];
+}
+function renderNow(r, on, stale) {
+  const el = $("#now");
+  el.classList.toggle("on", on && !stale); el.classList.toggle("stale", stale);
+  $("#now-v").textContent = r.flow == null && r.power == null ? "–" : on ? "On" : "Off";
+  const [run, going] = lastRun();
+  const startedOn = run && going && run.start > now() - 86400 + 600;
+  $("#now-s").textContent = on
+    ? `${startedOn ? `since ${hhmm(run.start)} · ` : run && going ? "more than 24 h · " : ""}${f1(r.power)} kW${tapNow() ? " · probably hot tap water" : ""}`
+    : run && !going ? `off since ${hhmm(run.end)}` : R24 ? "off for more than 24 h" : "";
+  // message: what the temperatures mean
+  let msg;
+  if (r.temp1 == null) msg = "Waiting for the first reading.";
+  else if (r.flow > 0) {
+    const rt = rateDiff(r.tempdiff, r.flow);
+    msg = `Hot water arrives at <b class="temp-in">${f0(r.temp1)}°</b> and goes back at <b class="temp-back">${f0(r.temp2)}°</b>, so your home keeps <b>${f0(r.tempdiff)}°</b> of it as heat. ` +
+      (rt?.[1] === "good" ? `<span class="soft">That's good: the cooler the water goes back, the better the heat is used.</span>`
+        : rt?.[1] === "warn" ? `<span class="soft">That's not much: the water goes back still warm, so a lot of it flows through for little heat.</span>`
+        : `<span class="soft">That's fine. Above 25° would be better.</span>`);
+  } else msg = `No hot water is flowing. The pipe at the meter is <b class="temp-in">${f0(r.temp1)}°</b> on the way in and <b class="temp-back">${f0(r.temp2)}°</b> on the way back; it cools down while nothing flows.`;
+  $("#now-msg").innerHTML = msg;
+  // last 6 hours: when heat came in
+  const t0 = now() - 6 * 3600;
+  $("#now-track").innerHTML = (R24?.runs || []).filter((x) => (x.ongoing ? now() : x.end) > t0).map((x) => {
+    const a = Math.max(x.start, t0), b = x.ongoing ? now() : x.end;
+    return `<i style="left:${((a - t0) / 216).toFixed(2)}%;width:${Math.max(0.3, (b - a) / 216).toFixed(2)}%" title="${hhmm(x.start)}–${x.ongoing ? "now" : hhmm(x.end)}"></i>`;
+  }).join("") + (TW24?.events || []).filter((x) => (x.ongoing ? now() : x.end) > t0).map((x) => {
+    const a = Math.max(x.start, t0), b = x.ongoing ? now() : x.end;
+    return `<i class="tap" style="left:${((a - t0) / 216).toFixed(2)}%;width:${Math.max(0.6, (b - a) / 216).toFixed(2)}%" title="${hhmm(x.start)}: ${esc(x.label)} hot tap water, ${tapE(x.kwh)}"></i>`;
+  }).join("");
+  const facts = [];
+  if (R24) { const [m, n] = onSinceT(t0); facts.push(`<span>On <b>${dur(m)}</b> in the last 6 h${n ? `, ${n} time${n === 1 ? "" : "s"}` : ""}</span>`); }
+  if (r.flow != null) facts.push(`<span>Flow <b>${f0(r.flow)} l/h</b></span>`);
+  const tw6 = (TW24?.events || []).filter((x) => x.end > t0);
+  if (TW24) facts.push(`<span>Probably hot tap water <b>${tw6.length ? `${tw6.length}×` : "not"}</b> in the last 6 h${tw6.length ? `, last at ${hhmm(tw6[0].start)}` : ""}</span>`);
+  facts.push(`<a class="morelink" style="margin:0;font-size:12px" href="#/onoff">Every time heat came in →</a>`);
+  if (SUM?.last24) facts.push(`<span>Last 24 h <b>${fmtE(SUM.last24.energy)}</b>${money(SUM.last24.energy) ? ` · ${money(SUM.last24.energy)}` : ""}</span>`);
+  if (r.maxpower_m) facts.push(`<span>Most this month <b>${f1(r.maxpower_m)} kW</b>${meterDate(r.maxpowerdate_m) ? ` on ${shortDate(meterDate(r.maxpowerdate_m))}` : ""}</span>`);
+  facts.push(`<span>Checked ${ago(S.status.last_ok || S.ts)}</span>`);
+  $("#now-facts").innerHTML = facts.join("");
+}
+
+function renderMetrics(r) {
+  const grid = $("#mgrid");
+  if (!grid.children.length) grid.innerHTML = MORDER.map((k) => `<button class="rcard" data-m="${k}"><div class="top"><span class="nm lbl"><i class="sw" style="background:var(${METRICS[k].color})"></i>${METRICS[k].name}</span></div><div class="t num"></div><div class="st"></div><div class="md"></div><canvas class="spark"></canvas></button>`).join("");
+  const t1 = now(), t0 = t1 - 86400;
+  for (const k of MORDER) {
+    const m = METRICS[k], card = $(`[data-m="${k}"]`, grid), v = r[k];
+    card.classList.toggle("heating", k === "power" && usingHeat(r));
+    $(".t", card).innerHTML = v == null ? "–" : `${num(v, m.dec)}<span class="u">${m.u}</span>`;
+    const [stx, scls] = m.state(r);
+    $(".st", card).className = "st " + scls; $(".st", card).textContent = stx;
+    const pts = S24?.series?.[k] || [];
+    const lo = pts.length ? Math.min(...pts.map((p) => p[1])) : null, hi = pts.length ? Math.max(...pts.map((p) => p[1])) : null;
+    $(".md", card).textContent = pts.length > 2 ? `24 h: ${num(lo, m.dec)} – ${num(hi, m.dec)}${m.unit}` : "";
+    sparkline($("canvas", card), pts, css(m.color), t0, t1, { zero: m.zero, minSpan: m.minSpan });
+  }
+}
+
+function renderUsageCards() {
+  if (!SUM) return;
+  const today = SUM.today, hours = today.hours, hourNow = new Date().getHours();
+  const hrs = Array.from({ length: 24 }, (_, i) => hours.find((b) => new Date(b.t * 1000).getHours() === i && b.t >= hours[0].t) || null);
+  const maxH = Math.max(0.002, ...hours.map((b) => b.energy));
+  $("#u-today").textContent = today.hours_data || today.energy ? fmtE(today.energy) : "–";
+  const peakHours = hours.filter((b) => b.energy > 0).sort((a, b) => b.energy - a.energy).slice(0, 2).sort((a, b) => a.t - b.t);
+  const sub = [altE(today.energy), money(today.energy)].filter(Boolean);
+  const cov = hours.filter((b) => b.hours_data).length;
+  $("#u-today-s").textContent = !cov ? "No readings today yet." : (sub.length ? `≈ ${sub.join(" · ")}` : "") + (peakHours.length ? `${sub.length ? " · " : ""}most around ${andList(peakHours.map((b) => hhmm(b.t)))}` : "");
+  $("#u-hours").innerHTML = hrs.map((b, h) => {
+    const future = h > hourNow, nodata = !future && (!b || !b.hours_data);
+    const cls = future ? "future" : nodata ? "nodata" : b.energy ? "" : "zero";
+    const lab = `${String(h).padStart(2, "0")}:00–${String(h + 1).padStart(2, "0")}:00`;
+    const tip = future ? `${lab} · later today` : nodata ? `${lab} · no readings` : `${lab} · ${fmtE(b.energy)} (${altE(b.energy)})${money(b.energy) ? " · " + money(b.energy) : ""}${b.p_max != null ? ` · up to ${f1(b.p_max)} kW` : ""}${b.hours_est ? " · estimated" : ""}`;
+    const tp = !future && !nodata && b.tap_kwh && b.energy ? Math.min(100, (b.tap_kwh / (b.energy * GJ_KWH)) * 100) : 0;
+    const tipT = tp ? ` · probably hot tap water ${tapE(b.tap_kwh)}` : "";
+    return `<div class="${cls}" title="${esc(tip + tipT)}"><i style="height:${future || nodata ? 100 : Math.min(100, (b.energy / maxH) * 100)}%">${tp ? `<b class="tap" style="height:${tp.toFixed(1)}%"></b>` : ""}</i></div>`;
+  }).join("");
+  const days = SUM.days, rec = days.filter((d) => d.hours_data), total = rec.reduce((a, d) => a + d.energy, 0);
+  const maxD = Math.max(0.002, ...days.map((d) => d.energy));
+  $("#u-week").textContent = rec.length ? fmtE(total) : "–";
+  const wsub = [altE(total), money(total)].filter(Boolean).join(" · ");
+  const fullDays = days.slice(0, -1).filter((d) => d.hours_data >= d.hours * 0.9);
+  $("#u-week-s").textContent = !rec.length ? "No readings yet." : rec.length < days.length || days.some((d) => d.hours_data < d.hours * 0.9 && d !== days.at(-1))
+    ? `${wsub ? "≈ " + wsub + " · " : ""}readings on ${rec.length} of the last ${days.length} days`
+    : `${wsub ? "≈ " + wsub + " · " : ""}about ${fmtE(fullDays.reduce((a, d) => a + d.energy, 0) / Math.max(1, fullDays.length))} a day`;
+  $("#u-days").innerHTML = days.map((d, i) => {
+    const nodata = !d.hours_data, last = i === days.length - 1;
+    const part = !nodata && !last && d.hours_data < d.hours * 0.9;
+    const tip = `${dayLabel(d.t)} · ${nodata ? "no readings" : `${fmtE(d.energy)} (${altE(d.energy)})${money(d.energy) ? " · " + money(d.energy) : ""}${part ? ` · readings for ${d.hours_data} of ${d.hours} hours` : ""}${d.hours_est ? " · partly estimated" : ""}`}`;
+    const tp = !nodata && d.tap_kwh && d.energy ? Math.min(100, (d.tap_kwh / (d.energy * GJ_KWH)) * 100) : 0;
+    const tipT = tp ? ` · probably hot tap water ${tapE(d.tap_kwh)} (${d.tap_uses}×)` : "";
+    return `<div class="${nodata ? "nodata" : d.energy ? "" : "zero"}${last ? " today" : ""}" title="${esc(tip + tipT)}"><span class="bv">${nodata ? "" : fmtE(d.energy, false)}</span><i style="height:${nodata ? 100 : (d.energy / maxD) * 100}%;max-height:calc(100% - 16px)${part ? ";opacity:.5" : ""}">${tp ? `<b class="tap" style="height:${tp.toFixed(1)}%"></b>` : ""}</i></div>`;
+  }).join("");
+  $("#u-today-tap").innerHTML = tapSplit(hours, today.energy);
+  $("#u-week-tap").innerHTML = tapSplit(days, total);
+  $("#u-days-ax").innerHTML = days.map((d, i) => `<span class="${i === days.length - 1 ? "on" : ""}">${i === days.length - 1 ? "Today" : new Date(d.t * 1000).toLocaleDateString([], { weekday: "short" })}</span>`).join("");
+}
+
+/** "heating ≈ X · hot tap water ≈ Y (n×)" for a set of buckets; empty without detailed readings */
+function tapSplit(buckets, totalGJ) {
+  const ok = buckets.filter((b) => b.tap_kwh != null);
+  if (!ok.length || !totalGJ) return "";
+  const k = ok.reduce((a, b) => a + b.tap_kwh, 0), n = ok.reduce((a, b) => a + (b.tap_uses || 0), 0);
+  const heat = Math.max(0, totalGJ * GJ_KWH - k);
+  return `<span><i class="sw" style="background:var(--heat)"></i>Heating <b>≈ ${tapE(heat)}</b></span><span><i class="sw" style="background:var(--tap)"></i>Hot tap water <b>≈ ${tapE(k)}</b>${n ? ` (${n}×)` : ""}</span><span class="tag tap smart" title="Recognised from the pattern in the readings, not measured">smart estimate</span>`;
+}
+
+function renderCompare() {
+  if (!SUM) return;
+  const C = SUM.compare, since = SUM.stats.first_ts;
+  const rows = [
+    ["today", "Today so far", "compared with yesterday by this time"],
+    ["week", "This week", "compared with last week by this time"],
+    ["last7", "Last 7 days", "compared with the 7 days before"],
+    ["month", "This month", "compared with the same days last month"],
+    ["year", "This year", "compared with last year by this date"],
+  ];
+  $("#cmp").innerHTML = rows.map(([k, label, sub]) => {
+    const c = C[k], enough = c.prev_coverage >= 0.8 && c.coverage >= 0.8;
+    const max = Math.max(c.energy, c.prev_energy, 1e-9);
+    let chip, note;
+    if (!since || c.coverage === 0) { chip = `<span class="chg same">No readings yet</span>`; }
+    else if (!enough) {
+      chip = `<span class="chg same">Not enough history</span>`;
+      note = `Recording since ${shortDate(since)}`;
+    } else {
+      const d = pct(c.energy, c.prev_energy);
+      chip = d == null ? `<span class="chg same">–</span>` : Math.abs(d) < 5 ? `<span class="chg same">About the same</span>` : d > 0 ? `<span class="chg more">${d}% more</span>` : `<span class="chg less">${-d}% less</span>`;
+    }
+    return `<div class="cmp"><div class="cl"><b>${label}</b><span>${note || sub}</span></div>
+      <div class="cb"><div><div class="bar"><i style="width:${(c.energy / max) * 100}%"></i></div><span>${fmtE(c.energy)}</span></div>
+        <div class="prev"><div class="bar"><i style="width:${enough ? (c.prev_energy / max) * 100 : 0}%"></i></div><span class="muted">${enough ? fmtE(c.prev_energy) : "–"}</span></div></div>
+      <div class="cv">${chip}${money(c.energy) ? `<span style="display:block;margin-top:4px">${money(c.energy)}</span>` : ""}</div></div>`;
+  }).join("") + `<div class="cmp" style="display:block"><span class="small muted">Heat use goes up and down with the weather outside, so compare similar weeks. The orange bar is now, the grey bar is the earlier period.</span></div>`;
+}
+
+/* ---------------------------------------------------------------- metric drawer */
+let drawerKey = null;
+function openMetric(k) { drawerKey = k; document.body.classList.add("drawer-open"); renderDrawer(true); }
+function closeDrawer() { drawerKey = null; document.body.classList.remove("drawer-open"); }
+$("#mgrid").onclick = (e) => { const b = e.target.closest("[data-m]"); if (b) openMetric(b.dataset.m); };
+$("#scrim").onclick = closeDrawer;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawerKey) closeDrawer(); });
+async function renderDrawer(rebuild) {
+  const k = drawerKey; if (!k) return;
+  const m = METRICS[k], r = R(), d = $("#drawer");
+  if (rebuild) {
+    d.innerHTML = `<div class="top"><div><h1 id="d-name">${m.name}</h1></div><button class="close" id="d-close" aria-label="Close">×</button></div>
+      <div class="bigtemp num" id="d-val"></div><div id="d-state"></div><div id="d-scale"></div>
+      <div class="explainer" style="margin-top:14px">${m.explain}</div>
+      <div class="toolbar" style="margin-top:18px"><div class="seg range" id="d-range"></div></div>
+      <div class="chart" id="d-chart"></div>`;
+    $("#d-close").onclick = closeDrawer;
+    buildRange($("#d-range"), "drawer", () => renderDrawer(false), RANGES.slice(0, 5));
+    $("#d-close").focus();
+  }
+  $("#d-val").innerHTML = r[k] == null ? "–" : `${num(r[k], m.dec)}<small>${m.u}</small>`;
+  const [stx, scls] = m.state(r);
+  $("#d-state").innerHTML = `<span class="tag ${scls}">${esc(stx)}</span>`;
+  if (m.scale && r[k] != null) {
+    const s = m.scale, at = Math.max(0, Math.min(100, ((r[k] - s.lo) / (s.hi - s.lo)) * 100));
+    const grad = s.stops.map(([v, c]) => `color-mix(in srgb, var(${c}) 70%, var(--surface)) ${((v - s.lo) / (s.hi - s.lo)) * 100}%`).join(",");
+    $("#d-scale").innerHTML = `<div class="rating"><div class="scale" style="background:linear-gradient(90deg,${grad})"><b style="left:${at}%"></b></div><div class="marks">${s.marks.map((x) => `<span>${x}</span>`).join("")}</div></div>`;
+  } else $("#d-scale").innerHTML = "";
+  try {
+    const data = await api(`api/series?hours=${rangeState.drawer}`);
+    if (drawerKey !== k) return;
+    lineChart($("#d-chart"), { t0: data.t0, t1: data.t1, bucket: data.bucket, height: 240, unit: m.unit.trim() === "°" ? "°" : "", decimals: m.dec, yMin: m.zero ? 0 : undefined,
+      series: [{ name: m.name, color: css(m.color), pts: data.series[k] || [], area: m.zero, unit: m.unit }] });
+  } catch { /* keep the last chart */ }
+}
+
+/* ---------------------------------------------------------------- heat use page */
+const GROUPS = [["", "Auto"], ["hour", "Hour"], ["day", "Day"], ["week", "Week"], ["month", "Month"]];
+let usGroup = "", US = null;
+function groupLabel(t, g, long) {
+  const d = new Date(t * 1000);
+  if (g === "hour") return long ? `${dayLabel(t)}, ${hhmm(t)}–${hhmm(t + 3600)}` : hhmm(t);
+  if (g === "day") return long ? dayLabel(t) : d.toLocaleDateString([], { weekday: "short", day: "numeric" });
+  if (g === "week") return long ? `Week of ${d.toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" })}` : d.toLocaleDateString([], { day: "numeric", month: "short" });
+  if (g === "month") return long ? d.toLocaleDateString([], { month: "long", year: "numeric" }) : d.toLocaleDateString([], { month: "short", year: "2-digit" });
+  return String(d.getFullYear());
+}
+const GROUP_WORD = { hour: "hour", day: "day", week: "week", month: "month", year: "year" };
+async function loadUsage() {
+  $("#us-loading").textContent = "Loading…";
+  try { US = await api(`api/usage?hours=${rangeState.usage}${usGroup ? `&group=${usGroup}` : ""}`); }
+  catch { $("#us-loading").textContent = "Couldn't load the history. Retrying shortly."; return; }
+  $("#us-loading").textContent = "";
+  renderUsagePage();
+}
+function renderUsagePage() {
+  if (!US) return;
+  const B = US.buckets, g = US.group, nowT = now();
+  $$("#us-group button").forEach((b) => b.classList.toggle("on", b.dataset.g === usGroup));
+  const rec = B.filter((b) => b.hours_data);
+  const total = B.reduce((a, b) => a + b.energy, 0), vol = B.reduce((a, b) => a + b.volume, 0);
+  const pmax = Math.max(...B.map((b) => b.p_max ?? -1));
+  const hoursData = B.reduce((a, b) => a + b.hours_data, 0);
+  const dts = B.filter((b) => b.dt != null && b.energy > 0);
+  const tapB = B.filter((b) => b.tap_kwh != null), tapK = tapB.length ? tapB.reduce((a, b) => a + b.tap_kwh, 0) : null;
+  const dtAvg = vol > 0 ? (total * 1e9) / (vol * 1000 * 4150) : null; // ΔT ≈ E / (m · c); c ≈ 4.15 kJ/(kg·K) for warm water
+  const tiles = [
+    [fmtE(total), "Heat used"],
+    [altE(total), unit() === "GJ" ? "In kWh" : "In GJ"],
+    ...(money(total) ? [[money(total), "Cost, without fixed charges"]] : []),
+    [hoursData >= 24 ? fmtE(total / (hoursData / 24)) : "–", "Average a day"],
+    [pmax >= 0 ? `${f1(pmax)} kW` : "–", "Most heat at once"],
+    [vol ? `${num(vol, vol < 10 ? 2 : 1)} m³` : "–", "Hot water through the meter"],
+    ...(tapK != null ? [[`≈ ${tapE(tapK)}`, `Probably hot tap water${total ? `, ${f0((tapK / (total * GJ_KWH)) * 100)}%` : ""}`]] : []),
+    [dtAvg != null && isFinite(dtAvg) ? `${f0(dtAvg)}°` : "–", "Heat taken out, on average"],
+  ];
+  $("#us-tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><div class="v num">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join("");
+  $("#us-title").textContent = `Heat used per ${GROUP_WORD[g]}`;
+  const span = (US.t1 - US.t0) / 86400;
+  $("#us-sub").textContent = rec.length ? `${span < 2 ? "last 24 hours" : `${Math.round(span)} days`} · ${unit()}` : "";
+  const bars = B.map((b) => {
+    const future = b.t > nowT;
+    return { v: inUnit(b.energy), part: b.tap_kwh ? inUnit(Math.min(b.energy, b.tap_kwh / GJ_KWH)) : 0, est: b.hours_est > b.hours_data / 2, nodata: !future && !b.hours_data, tick: groupLabel(b.t, g, false) };
+  });
+  if (!rec.length) emptyChart($("#us-chart"), 260, "No readings in this period yet");
+  else barChart($("#us-chart"), {
+    bars, height: 260, minMax: unit() === "kWh" ? 1 : 0.005, tickWidth: g === "hour" ? 46 : 64,
+    fmt: (v) => num(v, unit() === "kWh" ? 0 : v < 0.1 ? 3 : v < 1 ? 2 : 1),
+    tip: (i) => {
+      const b = B[i];
+      if (!b.hours_data) return `<div class="h">${esc(groupLabel(b.t, g, true))}</div><div class="small muted">No readings: the dashboard or the gateway was off.</div>`;
+      const rows = [
+        `<div class="r"><i class="box" style="background:var(--heat)"></i><b>${fmtE(b.energy)}</b><span>${altE(b.energy)}</span></div>`,
+        b.tap_kwh != null ? `<div class="r"><i class="box" style="background:var(--tap)"></i><b>≈ ${tapE(b.tap_kwh)}</b><span>probably hot tap water${b.tap_uses ? `, ${b.tap_uses}×` : ""}</span></div>` : "",
+        money(b.energy) ? `<div class="r"><i class="box" style="background:transparent"></i><b>${money(b.energy)}</b><span>cost</span></div>` : "",
+        b.p_max != null ? `<div class="r"><i style="background:var(--heat)"></i><b>${f1(b.p_max)} kW</b><span>most at once</span></div>` : "",
+        b.t1 != null ? `<div class="r"><i style="background:var(--in)"></i><b>${f0(b.t1)}°</b><span>in, on average</span></div>` : "",
+        b.t2 != null ? `<div class="r"><i style="background:var(--back)"></i><b>${f0(b.t2)}°</b><span>back, on average</span></div>` : "",
+        b.volume ? `<div class="r"><i style="background:var(--flowc)"></i><b>${num(b.volume * 1000, 0)} l</b><span>hot water</span></div>` : "",
+      ];
+      const note = b.hours_est ? `<div class="small muted" style="margin-top:6px;max-width:230px;white-space:normal">${b.hours_est === b.hours_data ? "Estimated" : "Partly estimated"}: the dashboard was off, so the heat used in between is spread evenly.</div>` : b.hours_data < b.hours && b.end <= nowT ? `<div class="small muted" style="margin-top:6px">Readings for ${b.hours_data} of ${b.hours} hours</div>` : "";
+      return `<div class="h">${esc(groupLabel(b.t, g, true))}</div>${rows.join("")}${note}`;
+    },
+  });
+  // typical day
+  const ty = US.typical, tyv = ty.map((x) => x.energy), tymax = Math.max(...tyv.filter((v) => v != null), 0);
+  const days = Math.max(...ty.map((x) => x.days));
+  $("#ty-sub").textContent = days ? `average of ${days} day${days === 1 ? "" : "s"} · ${unit()} per hour` : "";
+  if (!tymax) { $("#ty-text").textContent = "Shows when your home uses heat during the day, once there are a few days of readings."; emptyChart($("#ty-chart"), 180, "Not enough readings yet"); }
+  else {
+    const order = ty.filter((x) => x.energy != null).sort((a, b) => b.energy - a.energy);
+    const top = order.slice(0, 3).map((x) => x.hour).sort((a, b) => a - b);
+    const quiet = order.filter((x) => x.energy < tymax * 0.15).length;
+    $("#ty-text").textContent = `Most heat is used around ${andList(top.map((h) => `${String(h).padStart(2, "0")}:00`))}.${quiet >= 3 ? ` During ${quiet} hours of the day almost nothing is used.` : ""}`;
+    barChart($("#ty-chart"), {
+      height: 180, tickWidth: 40, bars: ty.map((x) => ({ v: x.energy == null ? 0 : inUnit(x.energy), nodata: x.energy == null, tick: x.hour % 6 === 0 ? `${String(x.hour).padStart(2, "0")}:00` : "" })),
+      fmt: (v) => num(v, unit() === "kWh" ? 1 : 3),
+      tip: (i) => `<div class="h">${String(i).padStart(2, "0")}:00–${String(i + 1).padStart(2, "0")}:00</div>${ty[i].energy == null ? `<div class="small muted">No readings</div>` : `<div class="r"><i class="box" style="background:var(--heat)"></i><b>${fmtE(ty[i].energy)}</b><span>on an average day</span></div>`}`,
+    });
+  }
+  // how well the heat is used: ΔT per bucket
+  const dtpts = dts.map((b) => [b.t + (b.end - b.t) / 2, b.dt]);
+  lineChart($("#dt-chart"), { t0: US.t0, t1: nowT, bucket: Math.max(3600, (B[0]?.end - B[0]?.t) || 3600), height: 180, unit: "°", decimals: 0, yMin: 0, yMinMax: 30,
+    series: [{ name: "Heat taken out", color: css("--flowc"), pts: dtpts }, { name: "Water going back", color: css("--back"), pts: dts.map((b) => [b.t + (b.end - b.t) / 2, b.t2]), width: 1.5, dash: [4, 3] }] });
+  // table, newest first
+  const showCost = !!S.settings.price_per_gj;
+  $("#us-table").innerHTML = `<thead><tr><th>${cap(GROUP_WORD[g])}</th><th class="r">Heat used</th><th class="r">${unit() === "GJ" ? "kWh" : "GJ"}</th>${showCost ? `<th class="r">Cost</th>` : ""}<th class="r">Hot water</th><th class="r" title="Recognised from the pattern in the readings, not measured">Hot tap water ✦</th><th class="r">Most at once</th><th class="r">In</th><th class="r">Back</th><th class="r">Taken out</th></tr></thead><tbody>` +
+    B.filter((b) => b.hours_data).reverse().map((b) => `<tr${b.hours_est ? ' class="dim" title="Estimated: the dashboard was off"' : ""}><td class="nowrap">${esc(groupLabel(b.t, g, true))}${b.hours_est ? " *" : ""}</td><td class="r num">${fmtE(b.energy)}</td><td class="r num muted">${altE(b.energy)}</td>${showCost ? `<td class="r num">${money(b.energy)}</td>` : ""}<td class="r num">${b.volume ? num(b.volume * 1000, 0) + " l" : "–"}</td><td class="r num">${b.tap_kwh != null ? `≈ ${tapE(b.tap_kwh)}${b.tap_uses ? ` <span class="muted">${b.tap_uses}×</span>` : ""}` : "–"}</td><td class="r num">${b.p_max != null ? f1(b.p_max) + " kW" : "–"}</td><td class="r num">${b.t1 != null ? f0(b.t1) + "°" : "–"}</td><td class="r num">${b.t2 != null ? f0(b.t2) + "°" : "–"}</td><td class="r num">${b.dt != null ? f0(b.dt) + "°" : "–"}</td></tr>`).join("") +
+    (rec.length ? "" : `<tr><td colspan="10" class="empty">No readings in this period yet.</td></tr>`) + "</tbody>";
+}
+
+/* ---------------------------------------------------------------- heat on/off page */
+const OO_RANGES = [["6 h", 6], ["24 h", 24], ["7 d", 168], ["30 d", 720]];
+/** one lane of on/off blocks with the power line over it */
+function onOffChart(host, o) {
+  host._redraw = () => onOffChart(host, o);
+  const c = makeChart(host, 200), g = c.cv.getContext("2d"), W = c.W, H = c.H;
+  const L = 40, Rr = 10, T = 8, B = 22, w = W - L - Rr, h = H - T - B;
+  const x = (t) => L + ((t - o.t0) / (o.t1 - o.t0)) * w;
+  const pts = o.power || [], pmax = Math.max(1, ...pts.map((p) => p[1]));
+  const step = niceStep(pmax), top = Math.ceil(pmax / step) * step, y = (v) => T + h - (v / top) * h;
+  g.clearRect(0, 0, W, H); g.font = "11px system-ui, -apple-system, sans-serif"; g.textBaseline = "middle"; g.lineWidth = 1;
+  // where there are no readings at all: hatched
+  g.fillStyle = hatchPattern(g, css("--axis"));
+  const first = o.first && o.first > o.t0 ? o.first : null;
+  if (first) g.fillRect(L, T, x(first) - L, h);
+  for (const [a, b] of o.gaps) g.fillRect(x(a), T, Math.max(1, x(b) - x(a)), h);
+  g.fillStyle = css("--heat"); g.globalAlpha = .22;
+  for (const r of o.runs) { const a = Math.max(x(r.start), L), b = Math.min(x(r.ongoing ? o.t1 : r.end), L + w); g.fillRect(a, T, Math.max(1, b - a), h); }
+  g.globalAlpha = 1;
+  for (const r of o.runs) { const a = Math.max(x(r.start), L), b = Math.min(x(r.ongoing ? o.t1 : r.end), L + w); g.fillRect(a, T + h - 6, Math.max(1, b - a), 6); }
+  g.fillStyle = css("--tap");
+  for (const r of o.taps || []) { const a = Math.max(x(r.start), L), b = Math.min(x(r.ongoing ? o.t1 : r.end), L + w); g.globalAlpha = .3; g.fillRect(a, T, Math.max(2, b - a), h); g.globalAlpha = 1; g.fillRect(a, T + h - 12, Math.max(2, b - a), 12); }
+  for (let v = 0; v <= top + 1e-9; v += step) {
+    const yy = Math.round(y(v)) + .5;
+    g.strokeStyle = v ? css("--grid") : css("--axis"); g.beginPath(); g.moveTo(L, yy); g.lineTo(L + w, yy); g.stroke();
+    g.fillStyle = css("--ink-3"); g.textAlign = "right"; g.fillText(`${+v.toFixed(1)}`, L - 6, yy);
+  }
+  g.textAlign = "center"; g.textBaseline = "alphabetic";
+  drawTicks(g, timeTicks(o.t0, o.t1), x, L, L + w, H);
+  g.strokeStyle = css("--heat-ink"); g.lineWidth = 1.5; g.lineJoin = "round"; g.beginPath();
+  let prev = null;
+  for (const [t, v] of pts) { if (!prev || t - prev > o.bucket * 4) g.moveTo(x(t), y(v)); else g.lineTo(x(t), y(v)); prev = t; }
+  g.stroke();
+  host.onpointerleave = () => { c.ov.getContext("2d").clearRect(0, 0, W, H); c.tip.style.display = "none"; };
+  host.onpointermove = (e) => {
+    const rc = host.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top;
+    if (px < L || px > L + w) return host.onpointerleave();
+    const t = o.t0 + ((px - L) / w) * (o.t1 - o.t0);
+    const og = c.ov.getContext("2d"); og.clearRect(0, 0, W, H);
+    og.strokeStyle = css("--ink-3"); og.beginPath(); og.moveTo(Math.round(px) + .5, T); og.lineTo(Math.round(px) + .5, T + h); og.stroke();
+    const run = o.runs.find((r) => t >= r.start && t <= (r.ongoing ? o.t1 : r.end));
+    const slack = (o.t1 - o.t0) / w * 3; // a few pixels either side: tap water is often only minutes wide
+    const tap = (o.taps || []).find((r) => t >= r.start - slack && t <= (r.ongoing ? o.t1 : r.end) + slack);
+    const gap = (first && t < first) || o.gaps.some(([a, b]) => t >= a && t <= b);
+    const p = nearest(pts, t);
+    let html = `<div class="h">${tipTime(t, o.t1 - o.t0)}</div>`;
+    if (gap) html += `<div class="small muted">No readings</div>`;
+    else if (run) html += `<div class="r"><i class="box" style="background:var(--heat)"></i><b>On</b><span>${hhmm(run.start)}–${run.ongoing ? "now" : hhmm(run.end)}, ${dur(run.minutes)}</span></div>` +
+      (run.energy != null ? `<div class="r"><i class="box" style="background:transparent"></i><b>${smallE(run.energy)}</b><span>heat in this run</span></div>` : "");
+    else html += `<div class="r"><i class="box" style="background:var(--grid)"></i><b>Off</b><span>no hot water flowing</span></div>`;
+    if (tap && !gap) html += `<div class="r"><i class="box" style="background:var(--tap)"></i><b>≈ ${tapE(tap.kwh)}</b><span>${esc(tap.label)} hot tap water, ${hhmm(tap.start)}–${tap.ongoing ? "now" : hhmm(tap.end)}</span></div>`;
+    if (p && Math.abs(p[0] - t) < o.bucket * 3 && !gap) html += `<div class="r"><i style="background:var(--heat-ink)"></i><b>${f1(p[1])} kW</b><span>heat coming in</span></div>`;
+    c.tip.innerHTML = html; placeTip(c, px, py);
+  };
+}
+async function loadOnOff() {
+  $("#oo-loading").textContent = "Loading…";
+  let R, P, TW;
+  try { [R, P, TW] = await Promise.all([api(`api/runs?hours=${rangeState.onoff}`), api(`api/series?hours=${rangeState.onoff}`), api(`api/tapwater?hours=${rangeState.onoff}`)]); }
+  catch { $("#oo-loading").textContent = "Couldn't load the history. Retrying shortly."; return; }
+  $("#oo-loading").textContent = "";
+  const st = R.stats, runs = R.runs;
+  for (const r of runs) if (r.ongoing) r.minutes = (now() - r.start) / 60;
+  const energy = runs.reduce((a, r) => a + (r.energy || 0), 0);
+  $("#oo-tiles").innerHTML = [
+    [st.covered_minutes ? dur(st.on_minutes) : "–", "Heat coming in"],
+    [st.on_pct != null ? `${num(st.on_pct, 0)}%` : "–", "Of the time"],
+    [f0(st.runs), "Times on"],
+    [dur(st.avg_minutes), "Average time on"],
+    [dur(st.longest_minutes), "Longest"],
+    [fmtE(energy), "Heat that came in"],
+  ].map(([v, l]) => `<div class="tile"><div class="v num">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join("");
+  // gaps: stretches without readings between runs/off periods are not known here; use the power series gaps
+  const gaps = [], b = P.bucket, pp = P.series.power || [];
+  for (let i = 1; i < pp.length; i++) if (pp[i][0] - pp[i - 1][0] > Math.max(b * 4, 900)) gaps.push([pp[i - 1][0] + b, pp[i][0]]);
+  if (pp.length && P.t1 - pp.at(-1)[0] > Math.max(b * 4, 900)) gaps.push([pp.at(-1)[0] + b, P.t1]);
+  const first = S.stats.first_ts;
+  if (!pp.length && !runs.length) emptyChart($("#oo-chart"), 200, "No readings in this period yet");
+  else onOffChart($("#oo-chart"), { t0: R.start, t1: R.end, bucket: b, runs, power: pp, gaps, first, taps: TW.events });
+  renderTapTable(TW);
+  $("#oo-n").textContent = runs.length ? `${runs.length} time${runs.length === 1 ? "" : "s"}, newest first` : "";
+  let day = null;
+  $("#oo-runs").innerHTML = `<thead><tr><th>On</th><th>Off</th><th class="r">How long</th><th class="r">Heat</th><th class="r">kW, average</th><th class="r">kW, most</th><th class="r">Flow, average</th></tr></thead><tbody>` +
+    (runs.length ? runs.map((r) => {
+      const d = dayLabel(r.start), head = d !== day ? `<tr class="group"><td colspan="7">${esc(d)}</td></tr>` : "";
+      day = d;
+      const nt = TW.events.filter((x) => x.start >= r.start && x.start <= (r.ongoing ? now() : r.end)).length;
+      const kind = nt ? ` <span class="tag tap" title="Recognised from the pattern in the readings">incl. hot tap water${nt > 1 ? ` ${nt}×` : ""}</span>` : "";
+      return `${head}<tr><td class="num">${hhmm(r.start)}${kind}</td><td class="num">${r.ongoing ? '<span class="tag heat">still on</span>' : hhmm(r.end)}</td><td class="r num">${r.minutes < 1 ? "<1 min" : dur(r.minutes)}</td><td class="r num">${smallE(r.energy)}</td><td class="r num">${f1(r.p_avg)}</td><td class="r num">${f1(r.p_max)}</td><td class="r num">${f0(r.flow_avg)} l/h</td></tr>`;
+    }).join("") : `<tr><td colspan="7" class="empty">Heat didn't come in during this period${st.covered_minutes ? "" : ", or there are no readings yet"}.</td></tr>`) + "</tbody>";
+}
+
+function renderTapTable(TW) {
+  const ev = TW.events, span = rangeState.onoff;
+  const per = span <= 24 ? "" : ` · about ${tapE(TW.kwh / Math.max(1, TW.days_with_readings))} a day`;
+  $("#tw-n").textContent = ev.length ? `${ev.length} time${ev.length === 1 ? "" : "s"}, newest first` : "";
+  $("#tw-text").innerHTML = !TW.days_with_readings ? "No readings in this period yet."
+    : !ev.length ? "Nothing in this period looked like a hot tap or shower. Only the heating used heat."
+    : `Of the <b>${tapE(TW.total_kwh)}</b> that came in, about <b>${tapE(TW.kwh)}</b> was probably hot tap water (${f0((TW.kwh / Math.max(0.001, TW.total_kwh)) * 100)}%) and <b>${tapE(TW.heating_kwh)}</b> heating${per}. ` +
+      `<span class="muted">Recognised from the pattern in the readings: a sudden jump in heat while the water going back gets colder.</span>`;
+  let day = null;
+  $("#tw-table").innerHTML = `<thead><tr><th>Started</th><th class="r">How long</th><th class="r">Hot tap water</th><th class="r">kW, most</th><th class="r">Normal heating</th><th class="r">Water back</th><th>How sure</th></tr></thead><tbody>` +
+    (ev.length ? ev.map((x) => {
+      const d = dayLabel(x.start), head = d !== day ? `<tr class="group"><td colspan="7">${esc(d)}</td></tr>` : "";
+      day = d;
+      const mins = x.ongoing ? (now() - x.start) / 60 : x.minutes;
+      return `${head}<tr><td class="num">${hhmm(x.start)}${x.ongoing ? ' <span class="tag tap">now</span>' : ""}</td><td class="r num">${mins < 1 ? "<1 min" : dur(mins)}</td><td class="r num">≈ ${tapE(x.kwh)}</td><td class="r num">${f1(x.p_max)}</td><td class="r num muted">${f1(x.normal_kw)} kW</td><td class="r num" title="Normally ${f0(x.normal_back)}°">${f0(x.t_back_min)}° <span class="muted">(${f0(x.normal_back)}°)</span></td><td class="nowrap">${likelyHTML(x.label)}</td></tr>`;
+    }).join("") : `<tr><td colspan="7" class="empty">No hot tap water recognised in this period.</td></tr>`) + "</tbody>";
+}
+
+/* ---------------------------------------------------------------- temperatures page */
+async function loadTemps() {
+  $("#t-loading").textContent = "Loading…";
+  let d;
+  try { d = await api(`api/series?hours=${rangeState.temps}`); } catch { $("#t-loading").textContent = "Couldn't load the history. Retrying shortly."; return; }
+  $("#t-loading").textContent = "";
+  const o = { t0: d.t0, t1: d.t1, bucket: d.bucket };
+  const s = d.series;
+  lineChart($("#t-temps"), { ...o, height: 280, unit: "°", series: [
+    { name: "Hot water in", color: css("--in"), pts: s.temp1 },
+    { name: "Water going back", color: css("--back"), pts: s.temp2 },
+  ], extra: (t) => { const a = nearest(s.temp1, t), b = nearest(s.temp2, t); return a && b && a[0] === t && b[0] === t ? `<div class="small muted" style="margin-top:4px">Your home kept ${f0(a[1] - b[1])}° of it</div>` : ""; } });
+  lineChart($("#t-power"), { ...o, height: 200, unit: "", decimals: 1, yMin: 0, series: [{ name: "kW, average", color: css("--heat"), pts: s.power, area: true, unit: " kW" }, ...(d.bucket > 60 ? [{ name: "kW, most", color: css("--heat-ink"), pts: s.power_max, width: 1, dash: [3, 3], unit: " kW" }] : [])] });
+  lineChart($("#t-flow"), { ...o, height: 200, unit: "", decimals: 0, yMin: 0, series: [{ name: "litres an hour", color: css("--flowc"), pts: s.flow, area: true, unit: " l/h" }] });
+  $("#t-note").textContent = d.bucket > 60 ? `Each point is the average of ${d.bucket >= 86400 ? `${Math.round(d.bucket / 86400)} day${d.bucket >= 172800 ? "s" : ""}` : d.bucket >= 3600 ? `${Math.round(d.bucket / 3600)} hour${d.bucket >= 7200 ? "s" : ""}` : `${Math.round(d.bucket / 60)} minutes`}. Choose a shorter period to see single readings.` : "";
+}
+
+/* ---------------------------------------------------------------- meter page */
+function kvRows(rows) { return rows.filter(Boolean).map(([k, v, ks, vs]) => `<div><div class="k">${k}${ks ? `<small>${ks}</small>` : ""}</div><div class="v">${v}${vs ? `<small>${vs}</small>` : ""}</div></div>`).join(""); }
+const onDate = (v) => (meterDate(v) ? `on ${shortDate(meterDate(v))}` : "");
+function lifetimeAvgTemp(txm3, vol) {
+  if (!txm3 || !vol) return null;
+  let t = txm3 / vol;
+  while (t > 150) t /= 10; // the meter keeps °C·m³ with extra decimals depending on its set-up
+  return t;
+}
+function renderMeter() {
+  const r = R();
+  if (!S.ts) { $("#mt-counters").innerHTML = `<tr><td class="empty">No reading yet.</td></tr>`; return; }
+  $("#mt-when").textContent = `read ${ago(S.ts)}`;
+  const years = r.hourcounter ? r.hourcounter / 8766 : null;
+  $("#mt-counters").innerHTML = [
+    ["Heat used", "since the meter was installed", `${num(r.heat_energy, 3)} GJ`, `${f0(r.heat_energy * GJ_KWH)} kWh`, "The number your energy company reads for your bill. It only goes up. Everything on the Heat use page is the difference of this counter between two moments."],
+    ["Cooling", "since the meter was installed", `${num(r.cooling_energy, 3)} GJ`, "", "Counted when the water going back is warmer than the water coming in, for example during summer or when pipes cool down. It is usually tiny and normally not billed."],
+    ["Hot water through the meter", "since the meter was installed", `${num(r.volume, 2)} m³`, `${f0(r.volume * 1000)} litres`, "All the hot water that ever flowed through. It flows round and goes back to the district heating; you don't use it up."],
+    ["Running time", "hours the meter has been working", `${f0(r.hourcounter)} h`, years ? `${num(years, 1)} years` : "", "Useful to see whether the meter has been off; it should keep up with the clock."],
+    ["Info events", "times the meter noted something unusual", f0(r.infoevent), "", "For example a short power cut or a temperature sensor briefly out of range. The number itself means little; the Event log shows when it goes up."],
+    ["Leak or burst", "alarm from the meter", r.leak_burst ? `<span class="tag crit">Code ${esc(r.leak_burst)}</span>` : `<span class="tag good">None</span>`, "", r.leak_burst ? "The meter sees a leak or a burst pipe. Check around the heat delivery set and call your energy company." : "The meter would raise this if it sees a leak or a burst pipe."],
+  ].map(([k, ks, v, vs, m]) => `<tr><th>${k}<span>${ks}</span></th><td class="v">${v}${vs ? `<span>${vs}</span>` : ""}</td><td class="m">${m}</td></tr>`).join("");
+  const avgCheck = (t1, t2) => t1 != null && t2 != null && t1 > 0 && t1 < t2;
+  const periodRows = (sfx) => {
+    const bad = avgCheck(r[`avgtemp1_${sfx}`], r[`avgtemp2_${sfx}`]);
+    return kvRows([
+      ["Most heat at once", `${f1(r[`maxpower_${sfx}`])} kW`, "", onDate(r[`maxpowerdate_${sfx}`])],
+      ["Least heat at once", `${f1(r[`minpower_${sfx}`])} kW`, "", onDate(r[`minpowerdate_${sfx}`])],
+      ["Most hot water flow", `${f0(r[`maxflow_${sfx}`])} l/h`, "", onDate(r[`maxflowdate_${sfx}`])],
+      ["Least hot water flow", `${f0(r[`minflow_${sfx}`])} l/h`, "", onDate(r[`minflowdate_${sfx}`])],
+      ["Hot water in, average", bad ? "–" : `${f0(r[`avgtemp1_${sfx}`])}°`, bad ? `The meter reports ${f1(r[`avgtemp1_${sfx}`])}°, lower than the water going back, so it's probably not right` : ""],
+      ["Water going back, average", `${f0(r[`avgtemp2_${sfx}`])}°`],
+    ]);
+  };
+  $("#mt-month").innerHTML = periodRows("m");
+  $("#mt-year").innerHTML = periodRows("y");
+  const lt1 = lifetimeAvgTemp(r.temp1xm3, r.volume), lt2 = lifetimeAvgTemp(r.temp2xm3, r.volume);
+  $("#mt-life").innerHTML = kvRows([
+    years && ["Heat used, a year on average", fmtE(r.heat_energy / years), `over ${num(years, 1)} years`, unit() === "GJ" ? `${f0((r.heat_energy / years) * GJ_KWH)} kWh` : `${num(r.heat_energy / years, 1)} GJ`],
+    years && ["Heat coming in, on average", `${num((r.heat_energy * GJ_KWH) / r.hourcounter, 2)} kW`, "averaged over every hour"],
+    years && ["Hot water a year", `${f0(r.volume / years)} m³`],
+    lt1 != null && ["Hot water in, average", `${f1(lt1)}°`, "weighted by the water that flowed"],
+    lt2 != null && ["Water going back, average", `${f1(lt2)}°`, "weighted by the water that flowed"],
+    lt1 != null && lt2 != null && ["Heat taken out, average", `${f1(lt1 - lt2)}°`],
+  ]) || `<p class="small muted">The meter doesn't report its lifetime counters.</p>`;
+  const [ww, wl] = wifiWords(r.wifi_rssi);
+  let clock = null;
+  if (r.device_date && r.device_time) {
+    const dd = String(r.device_date).padStart(6, "0"), tt = String(r.device_time).padStart(6, "0");
+    const md = new Date(2000 + +dd.slice(0, 2), +dd.slice(2, 4) - 1, +dd.slice(4, 6), +tt.slice(0, 2), +tt.slice(2, 4), +tt.slice(4, 6)).getTime() / 1000;
+    if (isFinite(md)) clock = [md, Math.round((md - S.ts) / 60)];
+  }
+  $("#mt-gw").innerHTML = kvRows([
+    ["Model", esc(r.gateway_model || "–")],
+    ["Network address", esc(S.settings.gateway.replace(/^https?:\/\//, "").replace(/\/kamst-ir\/api\/read$/, "")), "change it in Settings"],
+    ["MAC address", esc(String(r.mac_address || "–").replaceAll("_", ":"))],
+    ["Firmware", esc(r.firmware_running || "–"), r.firmware_update_available === true ? `update ${esc(r.firmware_available)} available` : "up to date"],
+    ["WiFi signal", `${sigBars(wl)}${r.wifi_rssi ? `${r.wifi_rssi} dBm` : "–"}`, ww],
+    ["MQTT", r.mqtt_configured === true ? "Set up" : "Not set up", "the gateway can also send readings to MQTT itself"],
+    clock && ["Meter's clock", `${hhmm(clock[0])}`, Math.abs(clock[1]) <= 5 ? "about right" : `${Math.abs(clock[1])} min ${clock[1] < 0 ? "behind" : "ahead"}; this doesn't affect what you pay`],
+    r.startup_time && ["Gateway started", esc(String(r.startup_time).replace("T", " ").replace("Z", " UTC")), "according to the gateway's own clock"],
+    r.battery_days_left && !/^0 years and 0 days$/.test(r.battery_days_left) && ["Meter battery", esc(r.battery_days_left), "left"],
+  ]);
+  $("#mt-raw").textContent = JSON.stringify(r, null, 2);
+}
+
+/* ---------------------------------------------------------------- events page */
+const EV = { offline: ["offline", "crit"], online: ["check", "good"], alarm: ["alert", "crit"], ok: ["check", "good"], gateway: ["chip", ""], meter: ["meter", "warn"], settings: ["settings", ""], start: ["play", "good"] };
+let EVS = null;
+async function loadEvents() {
+  try { EVS = await api("api/events?limit=1000"); } catch { return; }
+  if (page === "events") renderEvents();
+}
+function renderEvents() {
+  if (!EVS) return;
+  let day = null;
+  $("#ev-list").innerHTML = EVS.length ? EVS.map((e) => {
+    const d = dayLabel(e.ts), head = d !== day ? `<div class="evday">${esc(d)}</div>` : "";
+    day = d;
+    const [ic, cls] = EV[e.kind] || ["info", ""];
+    return `${head}<div class="ev ${cls}"><span class="when">${hhmm(e.ts)}</span>${icon(ic)}<div>${esc(e.text)}</div></div>`;
+  }).join("") : `<div class="empty">Nothing has happened yet.</div>`;
+}
+
+/* ---------------------------------------------------------------- settings page */
+const ST = { data: null, msg: {} };
+const POLLS = [[10, "10 s"], [30, "30 s"], [60, "1 min"], [120, "2 min"], [300, "5 min"]];
+const KEEPS = [[90, "90 days"], [365, "1 year"], [730, "2 years"], [1825, "5 years"], [0, "Forever"]];
+function segHTML(name, opts, cur) { return `<div class="seg" data-set="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${String(v) === String(cur) ? "on" : ""}">${l}</button>`).join("")}</div>`; }
+const fmtBytes = (n) => (n > 1e9 ? `${num(n / 1e9, 1)} GB` : n > 1e6 ? `${num(n / 1e6, 1)} MB` : `${f0(n / 1e3)} kB`);
+async function loadSettings() {
+  try { [ST.data, ST.keys] = await Promise.all([api("api/settings"), api("api/keys").then((r) => r.keys)]); } catch { $("#st-main").innerHTML = `<div class="empty">Couldn't load the settings.</div>`; return; }
+  renderSettings();
+}
+async function saveSetting(changes, section, okText) {
+  ST.msg[section] = { text: "Saving…" }; renderSettings(true);
+  const r = await postJSON("api/settings", changes);
+  if (r.ok) { ST.data = r; ST.msg[section] = { ok: true, text: okText }; await refreshState(); }
+  else ST.msg[section] = { ok: false, text: cap(r.error || "could not save") };
+  renderSettings();
+  if (page === "usage") renderUsagePage();
+}
+const msgHTML = (m, id) => `<div class="ctl-msg ${m?.ok ? "ok" : m?.ok === false ? "err" : ""}" id="${id}" aria-live="polite">${m ? (m.ok ? icon("check") : m.ok === false ? icon("alert") : "") + esc(m.text) : ""}</div>`;
+function renderSettings(keepInputs) {
+  const d = ST.data; if (!d) return;
+  const v = d.values, st = d.status, stats = d.stats;
+  if (keepInputs && $("#st-main").children.length) { for (const k of ["gw", "disp", "data", "acc", "mqtt"]) { const el = $(`#st-${k}-m`); if (el) el.outerHTML = msgHTML(ST.msg[k], `st-${k}-m`); } return; }
+  const conn = !v.gateway ? `<span class="tag warn">Not set</span>` : st.connected ? `<span class="tag good">${icon("check")}Connected</span> <span class="small muted">last reading ${ago(st.last_ok)}</span>` : st.connected === false ? `<span class="tag crit">Not answering</span> <span class="small muted">${esc(st.error || "")}</span>` : `<span class="tag">Waiting</span>`;
+  const SECTIONS = [["gw", "Gateway"], ["acc", "Access"], ["disp", "Showing heat"], ["mqtt", "Home Assistant & MQTT"], ["data", "History"]];
+  $("#st-main").innerHTML = `<nav class="setnav" aria-label="Settings sections">${SECTIONS.map(([id, t]) => `<button data-jump="${id}">${t}</button>`).join("")}</nav>
+    <div class="panel setsec" id="sec-gw"><h2>Gateway</h2><div class="sub">Where the meter's readings come from.</div>
+      <div class="setitem"><div class="lab"><b>Gateway address</b><span>The IP address of the Kamst-IR gateway, with its port if it isn't 80, e.g. <span class="mono">192.168.1.50:82</span>. A full address such as <span class="mono">http://…/kamst-ir/api/read</span> works too.</span></div>
+        <div class="ctl2"><div class="setinput"><input id="st-gw" value="${esc(v.gateway.replace(/\/kamst-ir\/api\/read$/, "").replace(/^http:\/\//, ""))}" placeholder="192.168.1.50:82" autocomplete="off" spellcheck="false"><button class="btn ghost" id="st-test">Test</button><button class="btn" id="st-save">Save</button></div>
+          <div>${conn}</div>${v.gateway ? `<div class="from mono">${esc(v.gateway)}</div>` : ""}<div class="ctl-msg" id="st-msg" aria-live="polite"></div></div></div>
+      <div class="setitem"><div class="lab"><b>Read the gateway every</b><span>The gateway reads the meter over infrared about once a minute; asking more often only repeats the same values, which are then not stored twice.</span></div>
+        <div class="ctl2">${segHTML("poll_interval", POLLS, v.poll_interval)}</div></div>
+      ${msgHTML(ST.msg.gw, "st-gw-m")}
+    </div>
+    ${accessHTML(d)}
+    <div class="panel setsec" id="sec-disp"><h2>Showing heat</h2>
+      <div class="setitem"><div class="lab"><b>Unit</b><span>GJ (gigajoule) is what district-heating bills use. kWh is what you know from electricity. 1 GJ is about 278 kWh.</span></div>
+        <div class="ctl2">${segHTML("unit", [["GJ", "GJ"], ["kWh", "kWh"]], v.unit)}</div></div>
+      <div class="setitem"><div class="lab"><b>Price per GJ</b><span>From your energy company's tariff sheet, including VAT, to show what the heat cost. Leave at 0 to hide costs. Fixed charges such as the connection fee are not included.</span></div>
+        <div class="ctl2"><div class="setinput"><input class="short" id="st-cur" value="${esc(v.currency)}" maxlength="4" style="width:56px" aria-label="Currency"><input class="short" id="st-price" inputmode="decimal" value="${v.price_per_gj || ""}" placeholder="0" aria-label="Price per GJ"><button class="btn" id="st-price-save">Save</button></div></div></div>
+      <div class="setitem"><div class="lab"><b>Appearance</b><span>Light, dark, or the same as this device. Saved on this device only.</span></div>
+        <div class="ctl2"><div class="theme" role="group" aria-label="Appearance">${$(".meta .theme").innerHTML}</div></div></div>
+      ${msgHTML(ST.msg.disp, "st-disp-m")}
+    </div>
+    ${mqttHTML(d)}
+    <div class="panel setsec" id="sec-data"><h2>History</h2><div class="sub">Every reading is stored on this computer in <span class="mono">data/meter.db</span>.</div>
+      <div class="setitem"><div class="lab"><b>Stored so far</b><span>Since ${stats.first_ts ? longDate(stats.first_ts) : "–"}</span></div>
+        <div class="ctl2"><span><b class="num">${f0(stats.readings)}</b> readings · ${fmtBytes(stats.db_bytes)}</span><a class="dl" href="api/export.csv" download>${icon("download")}Download every reading (CSV)</a></div></div>
+      <div class="setitem"><div class="lab"><b>Keep every single reading for</b><span>Older single readings can be thinned out to save space. Hourly totals, averages and the heat used per hour are always kept forever, so charts and totals stay complete.</span></div>
+        <div class="ctl2">${segHTML("reading_days", KEEPS, v.reading_days)}<span class="small muted" id="st-keep-n"></span></div></div>
+      ${msgHTML(ST.msg.data, "st-data-m")}
+    </div>
+    <p class="setfoot">Dashboard on port ${esc(d.port)} · time zone ${esc(d.tz)}. Settings are saved in <span class="mono">data/settings.json</span>.</p>`;
+  markTheme();
+  bindGatewayForm("st", () => { ST.msg.gw = null; loadSettings(); });
+  for (const seg of $$("[data-set]", $("#st-main"))) seg.onclick = async (e) => {
+    const b = e.target.closest("button"); if (!b || b.classList.contains("on")) return;
+    const key = seg.dataset.set, val = b.dataset.v;
+    if (key === "reading_days" && +val > 0) {
+      const c = await api(`api/settings/retention?days=${val}`).catch(() => null);
+      if (c?.count && !confirm(`This thins out ${c.count.toLocaleString()} single readings older than ${b.textContent}. Hourly totals are kept. Continue?`)) return;
+    }
+    const sec = key === "poll_interval" ? "gw" : key === "unit" ? "disp" : "data";
+    saveSetting({ [key]: key === "unit" ? val : +val }, sec, "Saved");
+  };
+  bindAccess(d); bindKeys(); bindMqtt();
+  $$("#st-main [data-jump]").forEach((b) => (b.onclick = () => $(`#sec-${b.dataset.jump}`).scrollIntoView({ behavior: "smooth", block: "start" })));
+  $("#st-price-save").onclick = () => saveSetting({ price_per_gj: $("#st-price").value || 0, currency: $("#st-cur").value || "€" }, "disp", "Saved");
+}
+
+/* ---------------------------------------------------------------- settings: sign-in */
+// ST.acc: null, or the change being asked for: "on" | "off" | "pw" (change the password)
+function accessHTML(d) {
+  const on = d.values.require_signin, a = ST.acc;
+  const pwField = (id, ph, auto) => `<input type="password" id="${id}" placeholder="${ph}" autocomplete="${auto}" required aria-label="${ph}">`;
+  let form = "";
+  if (a === "on" && d.default_password) form = `<form class="pwform" id="acc-form"><input type="text" autocomplete="username" value="kamstrup-monitor" hidden aria-hidden="true">
+      <span class="small soft">Choose the password everyone signs in with: at least 8 characters.</span>${pwField("acc-new", "New password", "new-password")}${pwField("acc-new2", "New password again", "new-password")}
+      <div style="display:flex;gap:8px"><button class="btn" type="submit">Switch sign-in on</button><button class="btn ghost" type="button" data-acc-cancel>Cancel</button></div></form>`;
+  else if (a === "on" || a === "off") form = `<form class="pwform" id="acc-form"><input type="text" autocomplete="username" value="kamstrup-monitor" hidden aria-hidden="true">
+      ${a === "off" ? `<div class="notice">Without sign-in, everyone on your network can open the dashboard and change its settings, including the gateway address.</div>` : ""}
+      ${pwField("acc-pw", "Dashboard password", "current-password")}
+      <div style="display:flex;gap:8px"><button class="btn" type="submit">${a === "on" ? "Switch sign-in on" : "Switch sign-in off"}</button><button class="btn ghost" type="button" data-acc-cancel>Cancel</button></div></form>`;
+  const pwItem = !on ? "" : `<div class="setitem"><div class="lab"><b>Password</b><span>Changing it signs out your other devices.</span></div><div class="ctl2">${a === "pw"
+      ? `<form class="pwform" id="acc-pwform"><input type="text" autocomplete="username" value="kamstrup-monitor" hidden aria-hidden="true">${pwField("acc-cur", "Current password", "current-password")}${pwField("acc-p1", "New password, at least 8 characters", "new-password")}${pwField("acc-p2", "New password again", "new-password")}
+          <div style="display:flex;gap:8px"><button class="btn" type="submit">Save new password</button><button class="btn ghost" type="button" data-acc-cancel>Cancel</button></div></form>`
+      : `<button class="btn ghost" id="acc-pw-open">Change password</button>`}</div></div>`;
+  const signOut = !on ? "" : `<div class="setitem"><div class="lab"><b>Sign out</b><span>Forgot the password? Set <span class="mono">RESET_PASSWORD=true</span> in <span class="mono">.env</span> and restart; it goes back to <span class="mono">kamstrup</span>.</span></div>
+      <div class="ctl2"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="acc-out">Sign out</button><button class="btn ghost" id="acc-out-all">Sign out other devices</button></div></div></div>`;
+  return `<div class="panel setsec" id="sec-acc"><h2>Access</h2><div class="sub">Who can use this dashboard, and which applications may read it. Nothing here can change your meter or your heating: the dashboard only reads.</div>
+    <div class="setitem"><div class="lab"><b>Ask for a password</b><span>On: everyone signs in with one password before seeing anything. Off: anyone who can reach this computer on your network can open the dashboard. Switching it either way asks for the password.</span></div>
+      <div class="ctl2"><div class="seg" id="acc-seg"><button data-v="on" class="${on ? "on" : ""}">On</button><button data-v="off" class="${on ? "" : "on"}">Off</button></div>${form}</div></div>
+    ${pwItem}
+    <div class="setitem"><div class="lab"><b>API keys</b><span>For other applications: Home Assistant, Homey or your own scripts. Every key can read all data and nothing else; keys can never change settings, passwords or keys. ${on ? "" : "<b>Sign-in is off</b>, so the API is open without a key right now; keys start to matter when you switch sign-in on."}</span></div>
+      <div class="ctl2" style="width:100%">${keysHTML()}</div></div>
+    <div class="setitem"><div class="lab"><b>Reading the data</b><span>Send the key in a header, never in the address: <span class="mono">Authorization: Bearer &lt;key&gt;</span> or <span class="mono">X-API-Key: &lt;key&gt;</span>.</span></div>
+      <div class="ctl2 small soft" style="gap:4px">${API_HELP.map(([path, what]) => `<div><span class="mono">GET ${esc(apiBase())}${path}</span><br>${what}</div>`).join("")}</div></div>
+    ${signOut}
+    ${msgHTML(ST.msg.acc, "st-acc-m")}
+  </div>`;
+}
+const apiBase = () => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}`;
+const API_HELP = [
+  ["api/meter", "Everything now, in plain names: heat on, kW, temperatures, flow, meter counters, heat used today. The easiest one for Homey or a Home Assistant REST sensor."],
+  ["api/runs?hours=24", "Every time heat came in, with totals."],
+  ["api/usage?hours=720&amp;group=day", "Heat used per hour, day, week or month."],
+  ["api/series?hours=24", "Power, temperatures and flow over time."],
+  ["api/summary", "Today, the last 7 days and the comparisons on Home."],
+  ["api/events", "The event log."],
+  ["api/export.csv", "Every stored reading as CSV."],
+];
+function keysHTML() {
+  const when = (ts) => (ts ? new Date(ts * 1000).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) : "");
+  const list = (ST.keys || []).map((k) => `<div class="keyrow"><div><b>${esc(k.label)}</b> <span class="tag">Read only</span>
+      <div class="meta2"><span class="mono">${esc(k.hint)}</span> · created ${when(k.created)} · ${k.last_used ? `last used ${ago(k.last_used)}` : "not used yet"}</div></div>
+      <button class="btn ghost" data-revoke="${esc(k.id)}" data-label="${esc(k.label)}">Revoke</button></div>`).join("");
+  const fresh = ST.newKey ? `<div class="newkey" role="status"><div><b>Copy the key for ${esc(ST.newKey.label)} now.</b> It is shown only this once; afterwards only its first and last characters are kept.</div>
+      <code id="st-newkey">${esc(ST.newKey.key)}</code>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="st-copy">Copy key</button><button class="btn ghost" id="st-newkey-done">Done, I've stored it</button></div>
+      <div class="small soft">For example:</div>
+      <code>curl -H "Authorization: Bearer ${esc(ST.newKey.key.slice(0, 8))}…" ${esc(apiBase())}api/meter</code></div>` : "";
+  const form = ST.keyForm ? `<form class="keyform" id="st-keyform">
+      <input type="text" id="st-key-label" placeholder="Name, e.g. Home Assistant" maxlength="60" required aria-label="Name for the key" value="${esc(ST.keyForm.label || "")}">
+      <div style="display:flex;gap:8px"><button class="btn" type="submit">Create key</button><button class="btn ghost" type="button" id="st-key-cancel">Cancel</button></div></form>`
+    : `<button class="btn ghost" id="st-key-new">Create API key</button>`;
+  return fresh + `<div class="keys">${list}</div>` + (ST.newKey ? "" : form);
+}
+function bindKeys() {
+  $("#st-key-new") && ($("#st-key-new").onclick = () => { ST.keyForm = { label: "" }; ST.msg.acc = null; renderSettings(); setTimeout(() => $("#st-key-label")?.focus(), 30); });
+  $("#st-key-cancel") && ($("#st-key-cancel").onclick = () => { ST.keyForm = null; renderSettings(); });
+  $("#st-key-label") && ($("#st-key-label").oninput = (e) => { ST.keyForm.label = e.target.value; });
+  $("#st-keyform") && ($("#st-keyform").onsubmit = async (e) => {
+    e.preventDefault();
+    const r = await postJSON("api/keys", { label: $("#st-key-label").value.trim() });
+    if (!r.ok) { ST.msg.acc = { ok: false, text: cap(r.error || "could not create the key") }; return renderSettings(); }
+    ST.keys = r.keys; ST.keyForm = null; ST.newKey = { label: r.entry.label, key: r.key }; ST.msg.acc = null;
+    renderSettings();
+  });
+  $("#st-copy") && ($("#st-copy").onclick = async () => {
+    const b = $("#st-copy");
+    try { await navigator.clipboard.writeText(ST.newKey.key); b.textContent = "Copied"; }
+    catch { const rg = document.createRange(); rg.selectNodeContents($("#st-newkey")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); b.textContent = "Selected: press Ctrl/Cmd+C"; }
+  });
+  $("#st-newkey-done") && ($("#st-newkey-done").onclick = () => { ST.newKey = null; renderSettings(); });
+  $$("#st-main [data-revoke]").forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Revoke the key for ${b.dataset.label}?\n\nThat application can't read this dashboard any more, straight away. This can't be undone; you can create a new key.`)) return;
+    const r = await fetch(`api/keys/${encodeURIComponent(b.dataset.revoke)}`, { method: "DELETE" }).then((x) => x.json()).catch(() => ({ ok: false }));
+    if (r.ok) { ST.keys = r.keys; ST.msg.acc = { ok: true, text: `Key for ${b.dataset.label} revoked` }; }
+    else ST.msg.acc = { ok: false, text: "Could not revoke the key" };
+    renderSettings();
+  }));
+}
+
+/* ---------------------------------------------------------------- settings: MQTT */
+function mqttHTML(d) {
+  const v = d.values, st = d.mqtt || {};
+  const m = (ST.mq ??= { enabled: v.mqtt_enabled, host: v.mqtt_host, port: v.mqtt_port, tls: v.mqtt_tls, user: v.mqtt_user, password: "", base: v.mqtt_base, discovery: v.mqtt_discovery });
+  const status = !v.mqtt_enabled ? `<span class="small muted">Off</span>`
+    : st.connected ? `<span class="small" style="color:var(--good-ink)">${icon("check")} Connected to ${esc(v.mqtt_host)}${st.since ? ` since ${hhmm(st.since)}` : ""}${st.last_publish ? ` · last sent ${ago(st.last_publish)}` : ""}</span>`
+    : `<span class="small" style="color:var(--crit)">${icon("alert")} Not connected${st.error ? ": " + esc(st.error) : ""}</span>`;
+  const seg = (on) => `<div class="seg" id="mq-onoff"><button type="button" data-v="false" class="${on ? "" : "on"}">Off</button><button type="button" data-v="true" class="${on ? "on" : ""}">On</button></div>`;
+  return `<div class="panel setsec" id="sec-mqtt"><h2>Home Assistant & MQTT</h2><div class="sub">Publish the meter to an MQTT broker after every reading. Home Assistant finds it by itself (MQTT discovery) as one device, "Kamstrup heat meter"; Homey and others can subscribe to the same topic. Only sending: nothing can be changed over MQTT.</div>
+    <div class="setitem"><div class="lab"><b>Connection to the broker</b><span>In Home Assistant, the Mosquitto add-on is a broker: use the Home Assistant address and an MQTT user.</span></div><div class="ctl2">
+      ${status}
+      <form class="mqform" id="st-mq">
+        ${seg(m.enabled)}
+        <div class="two"><label class="f2">Broker address<input type="text" id="mq-host" value="${esc(m.host)}" placeholder="e.g. 192.168.1.20 or homeassistant.local" spellcheck="false" autocomplete="off"></label>
+          <label class="f2">Port<input type="number" id="mq-port" value="${esc(m.port)}" min="1" max="65535"></label></div>
+        <label class="chk"><input type="checkbox" id="mq-tls" ${m.tls ? "checked" : ""}> Encrypted (TLS), usually port 8883</label>
+        <div class="two" style="grid-template-columns:1fr 1fr"><label class="f2">User name<input type="text" id="mq-user" value="${esc(m.user)}" autocomplete="off" spellcheck="false"></label>
+          <label class="f2">Password<input type="password" id="mq-pass" value="${esc(m.password)}" placeholder="${v.mqtt_password_set ? "saved, leave empty to keep" : ""}" autocomplete="new-password"></label></div>
+        <details><summary>Topics</summary><div style="display:grid;gap:8px;margin-top:6px">
+          <label class="f2">Base topic<input type="text" id="mq-base" value="${esc(m.base)}" spellcheck="false"></label>
+          <label class="f2">Home Assistant discovery prefix<input type="text" id="mq-disc" value="${esc(m.discovery)}" spellcheck="false"></label>
+          <span class="small muted">All values, as JSON: <span class="mono">${esc(m.base)}/state</span> (the same as <span class="mono">api/meter</span>). Online or offline: <span class="mono">${esc(m.base)}/status</span>.</span></div></details>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="submit">Save and connect</button></div>
+      </form></div></div>
+    ${msgHTML(ST.msg.mqtt, "st-mqtt-m")}
+  </div>`;
+}
+function bindMqtt() {
+  const f = $("#st-mq"); if (!f) return;
+  const grab = () => Object.assign(ST.mq, { host: $("#mq-host").value.trim(), port: +$("#mq-port").value || 1883, tls: $("#mq-tls").checked,
+    user: $("#mq-user").value, password: $("#mq-pass").value, base: $("#mq-base").value.trim(), discovery: $("#mq-disc").value.trim() });
+  f.oninput = grab;
+  $$("#mq-onoff button").forEach((b) => (b.onclick = () => { grab(); ST.mq.enabled = b.dataset.v === "true"; renderSettings(); }));
+  $("#mq-tls").onchange = () => { grab(); if ($("#mq-tls").checked && +$("#mq-port").value === 1883) { ST.mq.port = 8883; renderSettings(); } };
+  f.onsubmit = async (e) => {
+    e.preventDefault(); grab();
+    const m = ST.mq;
+    if (m.enabled && !m.host) { ST.msg.mqtt = { ok: false, text: "Fill in the broker address" }; return renderSettings(); }
+    const body = { mqtt_enabled: m.enabled, mqtt_host: m.host, mqtt_port: m.port, mqtt_tls: m.tls, mqtt_user: m.user, mqtt_base: m.base || "kamstrup_monitor", mqtt_discovery: m.discovery || "homeassistant" };
+    if (m.password) body.mqtt_password = m.password;
+    ST.msg.mqtt = { text: "Saving…" }; renderSettings(true);
+    const r = await postJSON("api/settings", body);
+    if (!r.ok) { ST.msg.mqtt = { ok: false, text: cap(r.error || "could not save") }; return renderSettings(); }
+    ST.data = r; ST.mq = null;
+    ST.msg.mqtt = { ok: true, text: m.enabled ? "Saved; connecting…" : "Saved; MQTT is off" };
+    renderSettings();
+    setTimeout(async () => { try { ST.data = await api("api/settings"); ST.msg.mqtt = null; if (page === "settings") renderSettings(); } catch { /* keep */ } }, 4000);
+  };
+}
+
+function bindAccess(d) {
+  const say = (ok, text) => { ST.msg.acc = { ok, text }; renderSettings(); };
+  $("#acc-seg").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const want = b.dataset.v === "on";
+    ST.acc = want === d.values.require_signin ? null : b.dataset.v; ST.msg.acc = null; renderSettings();
+    setTimeout(() => $("#acc-form input[type=password]")?.focus(), 30);
+  };
+  for (const b of $$("[data-acc-cancel]")) b.onclick = () => { ST.acc = null; ST.msg.acc = null; renderSettings(); };
+  const form = $("#acc-form");
+  if (form) form.onsubmit = async (e) => {
+    e.preventDefault();
+    const want = ST.acc === "on";
+    let password = $("#acc-pw")?.value;
+    if ($("#acc-new")) {
+      if ($("#acc-new").value !== $("#acc-new2").value) return say(false, "The two passwords are not the same");
+      password = $("#acc-new").value;
+    }
+    const r = await postJSON("api/settings", { require_signin: want, password });
+    if (!r.ok) return say(false, cap(r.error || "could not save"));
+    ST.data = r; ST.acc = null;
+    say(true, want ? "Sign-in is on. This device stays signed in." : "Sign-in is off.");
+  };
+  $("#acc-pw-open") && ($("#acc-pw-open").onclick = () => { ST.acc = "pw"; ST.msg.acc = null; renderSettings(); setTimeout(() => $("#acc-cur")?.focus(), 30); });
+  const pf = $("#acc-pwform");
+  if (pf) pf.onsubmit = async (e) => {
+    e.preventDefault();
+    if ($("#acc-p1").value !== $("#acc-p2").value) return say(false, "The two new passwords are not the same");
+    const r = await postJSON("api/auth/password", { current: $("#acc-cur").value, new: $("#acc-p1").value });
+    if (r.ok) ST.acc = null;
+    say(r.ok, r.ok ? "Password changed. Other devices sign in again with the new password." : cap(r.error || "could not change it"));
+  };
+  $("#acc-out") && ($("#acc-out").onclick = async () => { await postJSON("api/auth/logout", {}); location.reload(); });
+  $("#acc-out-all") && ($("#acc-out-all").onclick = async () => {
+    if (!confirm("Sign out every other phone, tablet and computer? They need the password again. This device stays signed in.")) return;
+    const r = await postJSON("api/auth/logout", { everywhere: true });
+    say(true, r.signed_out_others ? `Signed out ${r.signed_out_others} other device${r.signed_out_others === 1 ? "" : "s"}` : "No other devices were signed in");
+  });
+}
+
+/* ---------------------------------------------------------------- appearance */
+for (const b of $$(".meta .theme button")) b.innerHTML = icon(b.textContent);
+function currentTheme() { return document.documentElement.dataset.theme || "auto"; }
+function markTheme() { $$("[data-theme-set]").forEach((b) => { b.classList.toggle("on", b.dataset.themeSet === currentTheme()); b.setAttribute("aria-pressed", b.dataset.themeSet === currentTheme()); }); }
+function setTheme(t) {
+  if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { if (t === "auto") localStorage.removeItem("theme"); else localStorage.setItem("theme", t); } catch { /* storage blocked */ }
+  markTheme(); redraw();
+}
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-theme-set]"); if (b) setTheme(b.dataset.themeSet); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (currentTheme() === "auto") redraw(); });
+markTheme();
+function redraw() { renderPage(false); if (page === "usage") renderUsagePage(); if (page === "temps") loadTemps(); if (drawerKey) renderDrawer(false); }
+
+/* ---------------------------------------------------------------- menu sheet (phones and tablets) */
+const compact = matchMedia("(max-width: 1023px)");
+function openMore() { document.body.classList.add("more-open"); $("#tb-more").setAttribute("aria-expanded", "true"); setTimeout(() => $("#nav a.on, #nav a")?.focus(), 50); }
+function closeMore(back) {
+  if (!document.body.classList.contains("more-open")) return;
+  document.body.classList.remove("more-open"); $("#tb-more").setAttribute("aria-expanded", "false");
+  if (back) $("#tb-more").focus();
+}
+$("#tb-more").onclick = () => (document.body.classList.contains("more-open") ? closeMore(true) : openMore());
+$("#t-status").onclick = () => { location.hash = "#/settings"; };
+$("#side-close").onclick = () => closeMore(true);
+$("#mscrim").onclick = () => closeMore(true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("more-open")) closeMore(true); });
+compact.addEventListener("change", () => closeMore());
+document.addEventListener("pointerdown", (e) => {
+  if (e.pointerType !== "touch") return;
+  for (const host of $$(".chart")) if (host._c && !host.contains(e.target) && host.onpointerleave) host.onpointerleave();
+}, true);
+for (const [bars, info] of [["#u-hours", "#u-hours-i"], ["#u-days", "#u-days-i"]]) {
+  const show = (e) => { const b = e.target.closest("[title]"); if (b && $(bars).contains(b)) { $(info).textContent = b.title; $(info).classList.remove("muted"); } };
+  $(bars).addEventListener("pointerover", show);
+  $(bars).addEventListener("click", show);
+}
+
+/* ---------------------------------------------------------------- routing + data */
+const PAGES = ["home", "onoff", "usage", "temps", "meter", "events", "settings", "about"];
+function route() {
+  const [, p] = location.hash.match(/^#\/(\w+)/) || [];
+  page = PAGES.includes(p) ? p : "home";
+  $$(".page").forEach((el) => el.classList.toggle("on", el.id === "p-" + page));
+  $$("#nav a").forEach((a) => a.classList.toggle("on", a.dataset.p === page));
+  const tabs = $$("#tabbar a");
+  tabs.forEach((a) => { a.classList.toggle("on", a.dataset.p === page); a.toggleAttribute("aria-current", a.dataset.p === page); });
+  $("#tb-more").classList.toggle("on", !tabs.some((a) => a.dataset.p === page));
+  closeMore();
+  document.title = `${$("#nav a.on")?.textContent.replace(/\d+$/, "").trim() || "About"} · Kamstrup Monitor`;
+  renderPage(true);
+  window.scrollTo(0, 0);
+}
+function renderPage(entering) {
+  if (!S) return;
+  renderMeta();
+  if (page === "home") renderHome();
+  if (page === "usage" && entering) loadUsage();
+  if (page === "temps" && entering) loadTemps();
+  if (page === "onoff" && entering) loadOnOff();
+  if (page === "meter") renderMeter();
+  if (page === "events") { if (entering) loadEvents(); renderEvents(); }
+  if (page === "settings" && entering) loadSettings();
+}
+window.addEventListener("hashchange", route);
+
+async function refreshState() {
+  try { S = await api("api/state"); } catch { $("#m-dot").className = $("#t-dot").className = "dot crit"; $("#m-live").textContent = "Dashboard not answering"; $("#t-live").textContent = "Offline"; return false; }
+  return true;
+}
+let lastTs = null;
+async function tick(first) {
+  if (!(await refreshState())) return;
+  const fresh = S.ts !== lastTs;
+  if (first || fresh) {
+    lastTs = S.ts;
+    if (first || page === "home") await loadSlow();
+    renderPage(first);
+    if (drawerKey) renderDrawer(false);
+  } else renderMeta();
+}
+async function loadSlow() {
+  try { [SUM, S24, R24, TW24] = await Promise.all([api("api/summary"), api("api/series?hours=24"), api("api/runs?hours=24"), api("api/tapwater?hours=24")]); } catch { /* keep the last values */ }
+}
+/* ---------------------------------------------------------------- signing in */
+const _fetch = window.fetch.bind(window);
+// any request that comes back "signed out" or "change the password first" shows the matching screen
+window.fetch = async (...args) => {
+  const r = await _fetch(...args);
+  if (!String(args[0]).includes("api/auth/")) {
+    if (r.status === 401) showAuth("login");
+    else if (r.status === 403) { try { if ((await r.clone().json()).must_change) showAuth("change"); } catch { /* not ours */ } }
+  }
+  return r;
+};
+let authInfo = null;
+function hideAuth() { $("#auth").hidden = true; document.body.style.overflow = ""; }
+function showAuth(mode) {
+  const box = $("#auth-body");
+  if (!$("#auth").hidden && box.dataset.mode === mode) return;
+  $("#auth").hidden = false; document.body.style.overflow = "hidden"; box.dataset.mode = mode;
+  const reset = authInfo?.reset_active ? `<div class="notice">The password was reset with <span class="mono">RESET_PASSWORD</span>. Sign in with the default password <b class="mono">kamstrup</b>, choose a new one, then remove <span class="mono">RESET_PASSWORD</span> from <span class="mono">.env</span>.</div>` : "";
+  const say = (text) => { $("#auth-msg").className = "ctl-msg err"; $("#auth-msg").innerHTML = icon("alert") + esc(text); };
+  if (mode === "login") {
+    box.innerHTML = `<h1 id="auth-title">Sign in</h1><p>Enter the password for this dashboard.</p>${reset}
+      <form id="auth-form" style="display:grid;gap:12px">
+        <input type="text" autocomplete="username" value="kamstrup-monitor" hidden aria-hidden="true">
+        <label class="field"><span>Password</span><input type="password" id="auth-pw" autocomplete="current-password" required></label>
+        <label class="chk"><input type="checkbox" id="auth-keep" checked> Keep me signed in on this device</label>
+        <button class="btn" type="submit">Sign in</button>
+        <div class="ctl-msg" id="auth-msg" aria-live="polite"></div>
+      </form>
+      <details><summary>Forgot the password?</summary><p>On the computer that runs the dashboard, add <span class="mono">RESET_PASSWORD=true</span> to the <span class="mono">.env</span> file and restart it (<span class="mono">docker compose up -d</span>). Then sign in with the default password <b class="mono">kamstrup</b> and choose a new one. Remove the line from <span class="mono">.env</span> again afterwards.</p>
+      <p>A new installation also starts with the password <b class="mono">kamstrup</b>.</p></details>`;
+    $("#auth-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = $("#auth-form button"); btn.disabled = true; $("#auth-msg").className = "ctl-msg"; $("#auth-msg").textContent = "Signing in…";
+      const r = await postJSON("api/auth/login", { password: $("#auth-pw").value, remember: $("#auth-keep").checked });
+      btn.disabled = false;
+      if (!r.ok) { say(cap(r.error || "could not sign in")); $("#auth-pw").select(); return; }
+      if (r.must_change) return showAuth("change");
+      signedIn();
+    };
+    setTimeout(() => $("#auth-pw")?.focus(), 50);
+  } else {
+    box.innerHTML = `<h1 id="auth-title">Choose a new password</h1>
+      <p>You're signed in with the default password, which anyone can look up. Choose your own password: at least 8 characters.</p>${reset}
+      <form id="auth-form" style="display:grid;gap:12px">
+        <input type="text" autocomplete="username" value="kamstrup-monitor" hidden aria-hidden="true">
+        <label class="field"><span>New password</span><input type="password" id="auth-new" autocomplete="new-password" minlength="8" required></label>
+        <label class="field"><span>New password again</span><input type="password" id="auth-new2" autocomplete="new-password" minlength="8" required></label>
+        <button class="btn" type="submit">Save password</button>
+        <div class="ctl-msg" id="auth-msg" aria-live="polite"></div>
+      </form>`;
+    $("#auth-form").onsubmit = async (e) => {
+      e.preventDefault();
+      if ($("#auth-new").value !== $("#auth-new2").value) return say("The two passwords are not the same");
+      const r = await postJSON("api/auth/password", { new: $("#auth-new").value });
+      if (!r.ok) return say(cap(r.error || "could not save"));
+      signedIn();
+    };
+    setTimeout(() => $("#auth-new")?.focus(), 50);
+  }
+}
+function signedIn() {
+  if (started) { location.reload(); return; } // a session that ran out: start again cleanly
+  hideAuth(); start();
+}
+async function boot() {
+  authInfo = await _fetch("api/auth/status").then((r) => r.json()).catch(() => null);
+  if (!authInfo) { $("#auth").hidden = false; $("#auth-body").innerHTML = `<h1>Can't reach the dashboard</h1><p>Retrying…</p>`; return setTimeout(boot, 3000); }
+  if (!authInfo.signed_in) return showAuth("login");
+  if (authInfo.must_change) return showAuth("change");
+  hideAuth(); start();
+}
+
+let started = false;
+async function start() {
+  if (started) return;
+  started = true;
+  buildRange($("#us-range"), "usage", loadUsage);
+  $("#us-group").innerHTML = GROUPS.map(([g, l]) => `<button data-g="${g}" class="${g === usGroup ? "on" : ""}">${l}</button>`).join("");
+  $("#us-group").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; usGroup = b.dataset.g; loadUsage(); };
+  buildRange($("#t-range"), "temps", loadTemps, RANGES);
+  buildRange($("#oo-range"), "onoff", loadOnOff, OO_RANGES);
+  await tick(true);
+  route();
+  setInterval(() => tick(false), 15000);
+  setInterval(async () => { await loadSlow(); if (page === "home" && S) renderHome(); }, 60000);
+  setInterval(() => { if (page === "usage") loadUsage(); if (page === "temps") loadTemps(); if (page === "onoff") loadOnOff(); if (page === "events") loadEvents(); }, 60000);
+}
+boot();
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (page === "home" && S) renderHome(); }, 200); });
+</script>
+</body>
+</html>

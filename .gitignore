@@ -1,0 +1,11 @@
+# your own meter history and settings
+data/
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
