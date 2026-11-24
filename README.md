@@ -3,8 +3,6 @@
 A local dashboard and history for a **Kamstrup MULTICAL heat meter** on district heating, read through the
 [Smart Gateways Kamst-IR gateway](https://smartgateways.nl/en/product/kamst-ir-gateway-for-kamstrup-multical-meters/).
 
-![Home: whether district heating is delivering heat, the values right now and the heat used today and this week](docs/screenshots/home.png)
-
 - **Home**: in plain words: is heat being used, how much, how well (the water going back), plus anything worth a look
   (gateway offline, weak WiFi, leak alarm, water going back too warm, firmware update).
 - **Heat on/off**: whether heat is coming in right now (hot water flowing through the meter means the heat valve is open),
@@ -20,17 +18,35 @@ A local dashboard and history for a **Kamstrup MULTICAL heat meter** on district
 
 ## Screenshots
 
-| Heat on/off, with probably hot tap water | Heat use |
-|---|---|
-| ![Heat on/off: when heat came in, and every time it was probably hot tap water](docs/screenshots/heat-on-off.png) | ![Heat use per day, with the part that was probably hot tap water](docs/screenshots/heat-use.png) |
-| **Temperatures and flow** | **Dark mode** |
-| ![Hot water in and going back, heat coming in and flow over 24 hours](docs/screenshots/temperatures.png) | ![Home in dark mode](docs/screenshots/home-dark.png) |
+**Home**: in plain words whether the district heating is delivering heat, the values right now, and the heat used
+today and this week, split into heating and hot tap water.
 
-On a phone, with a tab bar at the bottom (light and dark):
+![Home: whether district heating is delivering heat, the values right now and the heat used today and this week](docs/screenshots/home.png)
+
+**Heat on/off**: when heat came in over the last 24 hours, and every time it was probably hot tap water, with how sure
+the dashboard is.
+
+![Heat on/off: when heat came in, and every time it was probably hot tap water](docs/screenshots/heat-on-off.png)
+
+**Heat use**: heat used per day from the meter's own counter, with the part that was probably hot tap water, a typical
+day and a table per period.
+
+![Heat use per day, with the part that was probably hot tap water](docs/screenshots/heat-use.png)
+
+**Temperatures and flow**: hot water coming in and water going back, heat coming in (kW) and flow, for any period.
+
+![Hot water in and going back, heat coming in and flow over 24 hours](docs/screenshots/temperatures.png)
+
+**Dark mode**: follows your device, or choose light or dark yourself.
+
+![Home in dark mode](docs/screenshots/home-dark.png)
+
+**On a phone**: the same pages, with a tab bar at the bottom.
 
 <p>
-  <img src="docs/screenshots/phone-home.png" width="260" alt="Home on a phone">
-  <img src="docs/screenshots/phone-on-off-dark.png" width="260" alt="Heat on/off on a phone, dark mode">
+  <img src="docs/screenshots/phone-home.png" width="300" alt="Home on a phone">
+  &nbsp;
+  <img src="docs/screenshots/phone-on-off-dark.png" width="300" alt="Heat on/off on a phone, dark mode">
 </p>
 
 ## History
