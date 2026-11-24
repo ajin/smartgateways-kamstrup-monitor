@@ -501,7 +501,7 @@ a.dl:hover { color: var(--ink); border-color: var(--axis); }
   #tw-table td:nth-child(3) { margin-left: auto; font-weight: 600; }
   #tw-table td:nth-child(n+4) { order: 2; font-size: 12px; color: var(--ink-2); }
   #tw-table td:nth-child(4)::after { content: " kW at most"; }
-  #tw-table td:nth-child(5)::before { content: "normal "; }
+  #tw-table td:nth-child(5)::before { content: "flow "; }
   #tw-table td:nth-child(6)::before { content: "back "; }
   #tw-table tr:not(.group)::after { content: ""; order: 1; flex-basis: 100%; }
   #oo-runs td:nth-child(5)::before { content: "avg "; color: var(--ink-3); }
@@ -632,10 +632,10 @@ a.dl:hover { color: var(--ink); border-color: var(--axis); }
         <details class="panel" style="margin-top:12px"><summary>How does the dashboard know?</summary><div class="pad how">
           <p>It doesn't know for sure. Your meter measures all heat going into the heat unit, and that unit makes both the heating and the hot tap water. There is no separate reading for each. So the dashboard looks at the pattern, every time a reading comes in:</p>
           <ul>
-            <li><b>It learns your home's normal heating level.</b> Floor heating is slow and steady, so the dashboard keeps a moving average of the heat coming in and of the temperature of the water going back, over about the last 40 minutes.</li>
-            <li><b>Hot tap water looks different.</b> When a shower or hot tap runs, the heat suddenly jumps (here often to 8–13 kW) while the water going back gets clearly colder. Cold tap water is cooling the heat unit. That combination is what it looks for.</li>
-            <li><b>It counts only the extra.</b> The heat above your normal heating level is counted as hot tap water; the rest stays heating. If your heat unit pauses the heating while the shower runs, the real share of hot water is a bit higher.</li>
-            <li><b>It rates how sure it is.</b> A big jump with a big temperature drop of a few minutes is <i>very likely</i> hot tap water; a small or long one is <i>possibly</i>. Anything longer than 45 minutes is taken to be the heating.</li>
+            <li><b>It learns how your heating behaves.</b> While only the heating runs, the dashboard keeps a moving average (about 40 minutes) of its usual flow (for example ~220 l/h), its power and the temperature of the water going back. Short heating bursts that start with cooler water are normal heating too.</li>
+            <li><b>Hot tap water looks different.</b> When a shower or hot tap runs, cold tap water cools the heat unit, so the water going back gets <i>very</i> cold (often 20–30°, colder than the heating ever sends back). The flow also changes: much lower than usual when only the tap takes heat, or a sudden jump above it when the tap runs on top of the heating.</li>
+            <li><b>It counts the right part.</b> When only the tap takes heat, all of it is hot tap water. When the heating runs at the same time, only the heat above the heating's usual power is counted.</li>
+            <li><b>It rates how sure it is.</b> Very cold water going back and a big change in flow for a few minutes is <i>very likely</i> hot tap water; a weaker sign is <i>likely</i> or <i>possibly</i>. Anything longer than 45 minutes is taken to be the heating.</li>
           </ul>
           <p class="muted" style="margin:0">The meter reads about once a minute, so a tap that runs for less than a minute may be missed. For an exact split you would need a second meter on the hot tap water.</p>
         </div></details>
@@ -1191,7 +1191,7 @@ function renderHome() {
       const level = share == null ? "" : share < 0.25 ? ", a little" : share < 0.6 ? `, about ${share < 0.4 ? "a third" : "half"} of the most this month` : share < 0.95 ? ", close to the most this month" : ", the most this month";
       sub = r.power >= ON_KW ? `Hot water from the district heating is flowing in, giving <b>${f1(r.power)} kW</b> of heat${level}.` : "Hot water is flowing in, but it gives off almost no heat yet.";
       const tw = tapNow();
-      if (tw) sub += ` <span class="tag tap smart">smart estimate</span> This is <b>${esc(tw.label)}</b> a hot tap or shower: the heat jumped above your normal ${f1(tw.normal_kw)} kW and the water going back got colder.`;
+      if (tw) sub += ` <span class="tag tap smart">smart estimate</span> This is <b>${esc(tw.label)}</b> a hot tap or shower: the water going back is ${f0(r.temp2)}°${tw.normal_flow ? ` and ${f0(r.flow)} l/h flows, where your heating usually takes about ${f0(tw.normal_flow)} l/h` : ""}.`;
     } else sub = "No hot water is flowing in: the heat valve is closed, because the heating and the hot taps don't ask for heat.";
     if (stale) sub = `The gateway stopped answering ${ago(st.last_ok || S.ts)}. These are the last values it sent.`;
     $("#hh-sub").innerHTML = sub;
@@ -1578,14 +1578,14 @@ function renderTapTable(TW) {
   $("#tw-text").innerHTML = !TW.days_with_readings ? "No readings in this period yet."
     : !ev.length ? "Nothing in this period looked like a hot tap or shower. Only the heating used heat."
     : `Of the <b>${tapE(TW.total_kwh)}</b> that came in, about <b>${tapE(TW.kwh)}</b> was probably hot tap water (${f0((TW.kwh / Math.max(0.001, TW.total_kwh)) * 100)}%) and <b>${tapE(TW.heating_kwh)}</b> heating${per}. ` +
-      `<span class="muted">Recognised from the pattern in the readings: a sudden jump in heat while the water going back gets colder.</span>`;
+      `<span class="muted">Recognised from the pattern in the readings: the water going back gets very cold, or the flow moves away from the heating's usual flow.</span>`;
   let day = null;
-  $("#tw-table").innerHTML = `<thead><tr><th>Started</th><th class="r">How long</th><th class="r">Hot tap water</th><th class="r">kW, most</th><th class="r">Normal heating</th><th class="r">Water back</th><th>How sure</th></tr></thead><tbody>` +
+  $("#tw-table").innerHTML = `<thead><tr><th>Started</th><th class="r">How long</th><th class="r">Hot tap water</th><th class="r">kW, most</th><th class="r">Flow, most</th><th class="r">Water back, coldest</th><th>How sure</th></tr></thead><tbody>` +
     (ev.length ? ev.map((x) => {
       const d = dayLabel(x.start), head = d !== day ? `<tr class="group"><td colspan="7">${esc(d)}</td></tr>` : "";
       day = d;
       const mins = x.ongoing ? (now() - x.start) / 60 : x.minutes;
-      return `${head}<tr><td class="num">${hhmm(x.start)}${x.ongoing ? ' <span class="tag tap">now</span>' : ""}</td><td class="r num">${mins < 1 ? "<1 min" : dur(mins)}</td><td class="r num">≈ ${tapE(x.kwh)}</td><td class="r num">${f1(x.p_max)}</td><td class="r num muted">${f1(x.normal_kw)} kW</td><td class="r num" title="Normally ${f0(x.normal_back)}°">${f0(x.t_back_min)}° <span class="muted">(${f0(x.normal_back)}°)</span></td><td class="nowrap">${likelyHTML(x.label)}</td></tr>`;
+      return `${head}<tr><td class="num">${hhmm(x.start)}${x.ongoing ? ' <span class="tag tap">now</span>' : ""}</td><td class="r num">${mins < 1 ? "<1 min" : dur(mins)}</td><td class="r num">≈ ${tapE(x.kwh)}</td><td class="r num">${f1(x.p_max)}</td><td class="r num" title="${x.normal_flow ? `The heating usually takes about ${f0(x.normal_flow)} l/h` : ""}">${f0(x.flow_max)} l/h${x.normal_flow ? ` <span class="muted">(${f0(x.normal_flow)})</span>` : ""}</td><td class="r num" title="${x.normal_back != null ? `Usually ${f0(x.normal_back)}° while the heating runs` : ""}">${f0(x.t_back_min)}°${x.normal_back != null ? ` <span class="muted">(${f0(x.normal_back)}°)</span>` : ""}</td><td class="nowrap">${likelyHTML(x.label)}</td></tr>`;
     }).join("") : `<tr><td colspan="7" class="empty">No hot tap water recognised in this period.</td></tr>`) + "</tbody>";
 }
 
