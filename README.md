@@ -3,6 +3,8 @@
 A local dashboard and history for a **Kamstrup MULTICAL heat meter** on district heating, read through the
 [Smart Gateways Kamst-IR gateway](https://smartgateways.nl/en/product/kamst-ir-gateway-for-kamstrup-multical-meters/).
 
+![Home: whether district heating is delivering heat, the values right now and the heat used today and this week](docs/screenshots/home.png)
+
 - **Home**: in plain words: is heat being used, how much, how well (the water going back), plus anything worth a look
   (gateway offline, weak WiFi, leak alarm, water going back too warm, firmware update).
 - **Heat on/off**: whether heat is coming in right now (hot water flowing through the meter means the heat valve is open),
@@ -16,6 +18,23 @@ A local dashboard and history for a **Kamstrup MULTICAL heat meter** on district
 - **Settings**: the gateway's address (with a Test button), how often to read, GJ or kWh, price per GJ, how long to keep single readings,
   **Access** (sign-in on or off, password, read-only API keys, sign out) and **Home Assistant & MQTT**.
 
+## Screenshots
+
+| Heat on/off, with probably hot tap water | Heat use |
+|---|---|
+| ![Heat on/off: when heat came in, and every time it was probably hot tap water](docs/screenshots/heat-on-off.png) | ![Heat use per day, with the part that was probably hot tap water](docs/screenshots/heat-use.png) |
+| **Temperatures and flow** | **Dark mode** |
+| ![Hot water in and going back, heat coming in and flow over 24 hours](docs/screenshots/temperatures.png) | ![Home in dark mode](docs/screenshots/home-dark.png) |
+
+On a phone, with a tab bar at the bottom (light and dark):
+
+<p>
+  <img src="docs/screenshots/phone-home.png" width="260" alt="Home on a phone">
+  <img src="docs/screenshots/phone-on-off-dark.png" width="260" alt="Heat on/off on a phone, dark mode">
+</p>
+
+## History
+
 Every reading is stored in `data/meter.db` (SQLite). Hourly totals are kept forever, also when you choose to thin out
 old single readings. When the dashboard was off, the heat used in between is still counted (the meter's counter keeps
 going) and spread evenly over the missing hours, marked as estimated.
@@ -26,13 +45,14 @@ With district heating, one meter measures all heat going into the heat unit (del
 heating and the hot tap water. The meter can't tell them apart, so the dashboard **recognises** hot tap water from the
 pattern in the readings (`app/tapwater.py`) and always shows it as an estimate ("probably", "≈"):
 
-- It learns the home's normal heating level: a moving average (about 40 minutes) of the heat coming in and of the
+- It learns how the heating behaves: a moving average (about 40 minutes) of its usual flow, power and the
   temperature of the water going back, from readings that were not hot tap water.
-- A shower or hot tap shows as a sudden jump in heat (2 kW or more above normal) while the water going back gets clearly
-  colder (4 °C or more): cold mains water cools the heat unit's tap water heat exchanger. Short pauses (a shower turned
-  off for a moment) are kept together; anything over 45 minutes is taken to be heating.
-- Only the heat above the normal heating level counts as hot tap water. If the heat unit pauses the heating during a
-  shower, the real share is a bit higher.
+- A shower or hot tap cools the heat unit with cold mains water, so the water going back gets **very** cold
+  (28 °C or less, colder than the heating ever sends back), or cold with a flow far below the heating's usual flow.
+  A tap running on top of the heating shows as a sudden jump in flow and heat with colder water going back.
+  Signs at most 3 minutes apart are one use; anything over 45 minutes is taken to be heating.
+- When only the tap takes heat, all of it counts as hot tap water; when the heating runs too, only the part above
+  the heating's usual power.
 - Every use gets a likelihood: very likely, likely or possibly.
 
 For an exact split you'd need a second meter on the hot tap water.
